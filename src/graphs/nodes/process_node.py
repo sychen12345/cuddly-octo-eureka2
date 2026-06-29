@@ -1,6 +1,6 @@
 """
 结果处理节点
-Agent节点：调用大模型将问候消息和分析评价整合为格式化的最终输出
+Agent节点：调用大模型将问候消息和两个并行分支的处理结果整合为最终输出
 """
 import os
 import json
@@ -21,7 +21,7 @@ def process_node(
 ) -> ProcessNodeOutput:
     """
     title: 结果处理
-    desc: 调用大模型将问候消息和分析评价整合为结构清晰、格式统一的最终输出
+    desc: 调用大模型将问候消息和两个并行分支结果整合为结构清晰的最终输出
     integrations: 大语言模型
     """
     ctx = runtime.context
@@ -41,7 +41,8 @@ def process_node(
     # 渲染用户提示词
     up = Template(up_template).render(
         greeting_message=state.greeting_message,
-        merged_analysis=state.merged_analysis
+        task1_result=state.task1_result,
+        task2_result=state.task2_result
     )
 
     # 调用大模型
