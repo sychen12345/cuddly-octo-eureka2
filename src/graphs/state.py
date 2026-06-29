@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 class GlobalState(BaseModel):
     """全局状态：工作流执行过程中的共享数据"""
     user_name: str = Field(default="", description="用户名称")
+    greeting_style: str = Field(default="", description="大模型推荐的问候风格")
     greeting_message: str = Field(default="", description="生成的问候消息")
     processed_result: str = Field(default="", description="处理后的最终结果")
 
@@ -26,10 +27,22 @@ class GraphOutput(BaseModel):
 
 
 # ============= 节点的输入输出定义 =============
+# Agent节点: 模型选取节点
+class ModelSelectNodeInput(BaseModel):
+    """模型选取节点的输入"""
+    user_name: str = Field(..., description="用户名称")
+
+
+class ModelSelectNodeOutput(BaseModel):
+    """模型选取节点的输出"""
+    greeting_style: str = Field(..., description="大模型推荐的问候风格")
+
+
 # 示例节点1: 问候生成节点
 class GreetingNodeInput(BaseModel):
     """问候生成节点的输入"""
     user_name: str = Field(..., description="用户名称")
+    greeting_style: str = Field(..., description="问候风格")
 
 
 class GreetingNodeOutput(BaseModel):
