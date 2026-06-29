@@ -10,6 +10,8 @@ from pydantic import BaseModel, Field
 class GlobalState(BaseModel):
     """全局状态：工作流执行过程中的共享数据"""
     user_name: str = Field(default="", description="用户名称")
+    grok_api_key: str = Field(default="", description="Grok API Key")
+    openai_api_key: str = Field(default="", description="OpenAI API Key")
     greeting_style: str = Field(default="", description="大模型推荐的问候风格")
     greeting_message: str = Field(default="", description="生成的问候消息")
     task1_result: str = Field(default="", description="并行分支1的处理结果")
@@ -21,6 +23,8 @@ class GlobalState(BaseModel):
 class GraphInput(BaseModel):
     """工作流的输入参数"""
     user_name: str = Field(..., description="用户输入的名称")
+    grok_api_key: str = Field(default="", description="Grok API Key（可选，未填则读环境变量 GROK_API_KEY）")
+    openai_api_key: str = Field(default="", description="OpenAI API Key（可选，未填则读环境变量 OPENAI_API_KEY）")
 
 
 class GraphOutput(BaseModel):
@@ -52,10 +56,11 @@ class GreetingNodeOutput(BaseModel):
     greeting_message: str = Field(..., description="生成的问候消息")
 
 
-# 并行分支1 task节点（功能待定义）
+# 并行分支1 task节点：Grok API 调用
 class Task1NodeInput(BaseModel):
     """并行分支1的输入"""
     greeting_message: str = Field(..., description="问候消息")
+    grok_api_key: str = Field(default="", description="Grok API Key")
 
 
 class Task1NodeOutput(BaseModel):
@@ -63,10 +68,11 @@ class Task1NodeOutput(BaseModel):
     task1_result: str = Field(..., description="分支1的处理结果")
 
 
-# 并行分支2 task节点（功能待定义）
+# 并行分支2 task节点：OpenAI API 调用
 class Task2NodeInput(BaseModel):
     """并行分支2的输入"""
     greeting_message: str = Field(..., description="问候消息")
+    openai_api_key: str = Field(default="", description="OpenAI API Key")
 
 
 class Task2NodeOutput(BaseModel):

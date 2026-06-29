@@ -27,9 +27,10 @@ def task1_node(
     """
     ctx = runtime.context
 
-    api_key: str = os.getenv("GROK_API_KEY", "")
+    # 优先用输入参数，fallback 到环境变量
+    api_key: str = state.grok_api_key or os.getenv("GROK_API_KEY", "")
     if not api_key:
-        raise ValueError("环境变量 GROK_API_KEY 未设置，请配置你的 Grok API Key")
+        raise ValueError("Grok API Key 未配置，请通过输入参数 grok_api_key 传入或设置环境变量 GROK_API_KEY")
 
     greeting: str = state.greeting_message
 
