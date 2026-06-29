@@ -1,0 +1,4 @@
+interface:
+  display_name: "XHS Content Workflow"
+  short_description: "Benchmark-to-card workflow for Xiaohongshu content"
+  default_prompt: "Use $xhs-content-workflow to turn a niche, benchmark notes, and comment notes into a topic bank and Xiaohongshu card package."

@@ -1,0 +1,54 @@
+# Output Schema
+
+Use this schema when the user needs structured output, durable topic-bank records, or Coze workflow integration.
+
+## Benchmark Account
+
+- `name`: account or benchmark label.
+- `platform`: default to `小红书` when unspecified.
+- `signal`: why this benchmark matters, such as recent growth, repeated high-engagement structure, or clear audience fit.
+- `content_patterns`: reusable patterns in titles, hooks, body structure, proof, CTA, or posting rhythm.
+- `visual_patterns`: cover, color, typography, image composition, page structure, or screenshot style.
+- `risk_notes`: what not to copy or what needs verification.
+
+## Demand Insight
+
+- `cluster`: demand category, such as beginner barrier, tool anxiety, time constraint, price sensitivity, or resource request.
+- `user_words`: short anonymized user phrases or comments.
+- `pain`: concrete pain behind the comments.
+- `desired_outcome`: what users want to achieve.
+- `content_angle`: how to turn the demand into content.
+- `confidence`: `high`, `medium`, or `low`, based on evidence quality.
+
+## Topic Record
+
+- `title`: working note title.
+- `audience`: target reader.
+- `hook`: first-page or first-sentence hook.
+- `demand_source`: comment cluster or benchmark pattern that justifies the topic.
+- `outline`: 3-6 bullets for the note.
+- `proof_needed`: data, screenshot, case, template, checklist, or personal experience needed before publishing.
+- `differentiation`: what makes this not a copy of the benchmark.
+- `priority`: `high`, `medium`, or `low`.
+
+## Card Package
+
+- `topic_title`: selected topic.
+- `cover_options`: 3-5 cover headline options.
+- `cards`: ordered page specs. Each page should include:
+  - `page`: integer.
+  - `headline`: short page title.
+  - `body`: concise copy.
+  - `visual_prompt`: visual direction or image-generation prompt.
+- `caption`: full Xiaohongshu body copy.
+- `hashtags`: 5-10 tags.
+- `cta`: a soft next action.
+- `review_checklist`: factual, ethical, and style checks before publishing.
+
+## Next Commands
+
+Write 3-5 short commands the user can paste next, such as:
+
+- `继续扩写第 1 个选题，生成 6 页卡片。`
+- `用更适合新手的语气改写封面标题。`
+- `把评论需求整理成 Obsidian 选题库 Markdown。`
