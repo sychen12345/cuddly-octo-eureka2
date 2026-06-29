@@ -100,7 +100,7 @@ def prompt_node(
             target_model={
                 "topic_selection": "规则评分",
                 "openai_text_description": str(_get(state, "openai_text_model", "gpt-5.5")),
-                "grok_expert_image_set": str(_get(state, "grok_image_model", "grok-expert")),
+                "grok_expert_image_set": str(_get(state, "grok_image_model", "grok-imagine-image-quality")),
                 "final_review": "workflow packager",
             }[key],
             default_prompt=default_prompt,

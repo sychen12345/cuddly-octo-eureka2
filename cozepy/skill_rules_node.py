@@ -141,7 +141,7 @@ def skill_rules_node(
         WorkflowStep(
             node_key="grok_image_set",
             title="Grok Expert 3:4 卡通套图",
-            model_or_tool=str(_get(state, "grok_image_model", "grok-expert")),
+            model_or_tool=str(_get(state, "grok_image_model", "grok-imagine-image-quality")),
             prompt_key="grok_expert_image_set",
             output_keys=["grok_image_set"],
         ),

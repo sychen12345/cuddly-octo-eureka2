@@ -1,8 +1,4 @@
-"""
-Grok Expert 3:4 卡通套图节点。
-
-消费 OpenAI 文案包和 Skill 图像规则，为每一页生成 Grok Expert 生图提示词。
-"""
+"""Grok Expert 3:4 卡通套图节点."""
 from __future__ import annotations
 
 from typing import Any, Dict
@@ -39,6 +35,11 @@ except ImportError:
         ModelRequest,
     )
 
+try:
+    from graphs.nodes.http_utils import ModelCallError, post_json, redact_secrets
+except ImportError:
+    from .http_utils import ModelCallError, post_json, redact_secrets
+
 
 def _get(state: Any, key: str, default: Any = None) -> Any:
     if isinstance(state, dict):
@@ -64,6 +65,22 @@ def _prompt(state: Any, key: str) -> str:
     return ""
 
 
+def _extract_image_url(response: Dict[str, Any]) -> str:
+    data = response.get("data")
+    if not isinstance(data, list) or not data:
+        return ""
+    first = data[0]
+    if not isinstance(first, dict):
+        return ""
+    url = first.get("url")
+    if isinstance(url, str) and url.strip():
+        return url.strip()
+    b64_json = first.get("b64_json")
+    if isinstance(b64_json, str) and b64_json.strip():
+        return "b64_json"
+    return ""
+
+
 def grok_image_node(
     state: GrokImageNodeInput,
     config: RunnableConfig | None = None,
@@ -76,7 +93,7 @@ def grok_image_node(
     """
     image_rules = _dump(_get(state, "image_style_rules", {}))
     text_package = _dump(_get(state, "openai_text_package", {}))
-    model = str(_get(state, "grok_image_model", "grok-expert")).strip() or "grok-expert"
+    model = str(_get(state, "grok_image_model", "grok-imagine-image-quality")).strip() or "grok-imagine-image-quality"
     mode = str(_get(state, "grok_image_mode", "Expert")).strip() or "Expert"
     aspect_ratio = str(image_rules.get("aspect_ratio") or _get(state, "image_aspect_ratio", "3:4"))
     style = str(image_rules.get("style") or _get(state, "image_style", "cartoon"))
@@ -87,8 +104,12 @@ def grok_image_node(
     reference_notes = "；".join(image_rules.get("reference_image_notes", []) or [])
     image_count = max(3, min(int(_get(state, "image_count", 6) or 6), 9))
     scripts = list(text_package.get("card_script", []) or [])[:image_count]
+    execute_model_calls = bool(_get(state, "execute_model_calls", False))
+    api_key = str(_get(state, "grok_api_key", "")).strip()
 
     images = []
+    completed = 0
+    failed = 0
     for index, script in enumerate(scripts, start=1):
         headline = script.split("：", 1)[0] if "：" in script else f"第 {index} 页"
         prompt = (
@@ -108,15 +129,32 @@ def grok_image_node(
             prompt_key="grok_expert_image_set",
             payload={
                 "model": model,
-                "mode": mode,
                 "prompt": prompt,
                 "aspect_ratio": aspect_ratio,
-                "style": style,
+                "response_format": "url",
                 "n": 1,
             },
-            dry_run=not bool(_get(state, "execute_model_calls", False)),
-            status="dry_run",
+            dry_run=not execute_model_calls,
+            status="dry_run" if not execute_model_calls else "ready",
         )
+        status = "dry_run"
+        image_url = ""
+        if execute_model_calls:
+            try:
+                response = post_json(request.endpoint, api_key, request.payload, timeout=120)
+                image_url = _extract_image_url(response)
+                status = "completed" if image_url else "failed"
+                request.status = "completed" if image_url else "failed: missing image url"
+            except ModelCallError as error:
+                safe_message = redact_secrets(error, [api_key])[:180]
+                status = "failed"
+                request.status = f"failed: {safe_message}"
+
+        if status == "completed":
+            completed += 1
+        elif status == "failed":
+            failed += 1
+
         images.append(
             ImageGenerationItem(
                 page=index,
@@ -125,9 +163,19 @@ def grok_image_node(
                 aspect_ratio=aspect_ratio,
                 style=style,
                 request=request,
-                status="dry_run",
+                image_url=image_url,
+                status=status,
             )
         )
+
+    image_set_status = "dry_run"
+    if execute_model_calls:
+        if not images:
+            image_set_status = "failed"
+        elif completed == len(images) and not failed:
+            image_set_status = "completed"
+        else:
+            image_set_status = "partial_failed" if completed else "failed"
 
     image_set = ImageSetPackage(
         provider="grok",
@@ -137,6 +185,6 @@ def grok_image_node(
         style=style,
         images=images,
         consistency_rules=consistency_rules,
-        status="dry_run",
+        status=image_set_status,
     )
     return GrokImageNodeOutput(grok_image_set=image_set)

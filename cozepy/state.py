@@ -73,7 +73,7 @@ class EditablePrompt(BaseModel):
 
 
 class ModelRequest(BaseModel):
-    """模型调用计划。默认 dry_run，避免测试时产生真实费用。"""
+    """模型调用计划或真实调用摘要。API Key 不进入 payload。"""
 
     provider: str = Field(..., description="模型供应商")
     model: str = Field(..., description="模型名")
@@ -82,7 +82,7 @@ class ModelRequest(BaseModel):
     prompt_key: str = Field(default="", description="关联提示词键名")
     payload: Dict[str, Any] = Field(default_factory=dict, description="建议请求载荷")
     dry_run: bool = Field(default=True, description="是否仅生成请求计划")
-    status: str = Field(default="planned", description="planned/dry_run/ready")
+    status: str = Field(default="planned", description="planned/dry_run/ready/completed/failed")
 
 
 class TextDescriptionPackage(BaseModel):
@@ -107,7 +107,7 @@ class ImageGenerationItem(BaseModel):
     prompt: str = Field(..., description="Grok Expert 生图提示词")
     aspect_ratio: str = Field(default="3:4")
     style: str = Field(default="cartoon")
-    request: ModelRequest = Field(default_factory=lambda: ModelRequest(provider="grok", model="grok-expert"))
+    request: ModelRequest = Field(default_factory=lambda: ModelRequest(provider="grok", model="grok-imagine-image-quality"))
     image_url: str = Field(default="", description="真实调用后可填充的图片链接")
     status: str = Field(default="dry_run")
 
@@ -116,7 +116,7 @@ class ImageSetPackage(BaseModel):
     """Grok Expert 生成的套图计划或结果。"""
 
     provider: str = Field(default="grok")
-    model: str = Field(default="grok-expert")
+    model: str = Field(default="grok-imagine-image-quality")
     mode: str = Field(default="Expert")
     aspect_ratio: str = Field(default="3:4")
     style: str = Field(default="cartoon")
@@ -181,7 +181,7 @@ class GlobalState(BaseModel):
     prompt_overrides: Dict[str, str] = Field(default_factory=dict, description="在线提示词覆盖")
     openai_text_model: str = Field(default="gpt-5.5", description="OpenAI 文案模型")
     openai_reasoning_mode: str = Field(default="ultra_high", description="OpenAI 推理模式")
-    grok_image_model: str = Field(default="grok-expert", description="Grok 生图模型")
+    grok_image_model: str = Field(default="grok-imagine-image-quality", description="Grok 生图模型")
     grok_image_mode: str = Field(default="Expert", description="Grok 生图模式")
     execute_model_calls: bool = Field(default=False, description="是否真实调用模型 API")
 
@@ -232,7 +232,7 @@ class GraphInput(BaseModel):
     prompt_overrides: Dict[str, str] = Field(default_factory=dict, description="在线提示词覆盖")
     openai_text_model: str = Field(default="gpt-5.5", description="OpenAI 文案模型")
     openai_reasoning_mode: str = Field(default="ultra_high", description="OpenAI 推理模式")
-    grok_image_model: str = Field(default="grok-expert", description="Grok 生图模型")
+    grok_image_model: str = Field(default="grok-imagine-image-quality", description="Grok 生图模型")
     grok_image_mode: str = Field(default="Expert", description="Grok 生图模式")
     execute_model_calls: bool = Field(default=False, description="是否真实调用模型 API")
 

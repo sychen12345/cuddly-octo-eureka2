@@ -58,24 +58,24 @@ Use this schema when the user needs structured output, durable topic-bank record
 
 - `provider`: `openai`.
 - `model`: default `gpt-5.5`.
-- `reasoning_mode`: default `ultra_high`.
-- `request`: dry-run or executable request plan.
+- `reasoning_mode`: default `ultra_high`; API payload maps this to `reasoning.effort=xhigh`.
+- `request`: dry-run request plan or real-call summary. API keys must never appear in `payload`.
 - `title_options`: cover title options.
 - `post_description`: Xiaohongshu caption/body.
 - `card_script`: page-by-page text script.
 - `image_brief`: visual brief passed to Grok.
-- `status`: `dry_run`, `planned`, or live-call status.
+- `status`: `dry_run`, `ready`, `completed`, or `failed`.
 
 ## Grok Image Set
 
 - `provider`: `grok`.
-- `model`: default `grok-expert`.
+- `model`: default `grok-imagine-image-quality`.
 - `mode`: default `Expert`.
 - `aspect_ratio`: default `3:4`.
 - `style`: default `cartoon`.
 - `images`: ordered image generation records.
 - `consistency_rules`: set-level visual consistency rules.
-- `status`: `dry_run`, `planned`, or live-call status.
+- `status`: `dry_run`, `completed`, `partial_failed`, or `failed`.
 
 Each image generation record includes:
 
@@ -86,7 +86,7 @@ Each image generation record includes:
 - `style`: default `cartoon`.
 - `request`: dry-run or executable request plan.
 - `image_url`: optional real generated image URL.
-- `status`: generation status.
+- `status`: `dry_run`, `completed`, or `failed`.
 
 ## Card Package
 

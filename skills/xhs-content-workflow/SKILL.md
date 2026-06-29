@@ -25,7 +25,7 @@ If the user gives only a short instruction, proceed with explicit assumptions an
 
 When the user wants current market evidence, search the web or the target platform if tools and permissions allow it. If live data is unavailable, clearly mark the result as a research framework or hypothesis and provide a sampling checklist.
 
-For the bundled Coze-style Python workflow, require runtime `grok_api_key` and `openai_api_key` inputs before any node runs. Never echo, log, or include those API keys in final outputs. Treat `prompt_overrides` as the online prompt editor for the workflow.
+For the bundled Coze-style Python workflow, require runtime `grok_api_key` and `openai_api_key` inputs before any node runs. Never echo, log, or include those API keys in final outputs. Treat `prompt_overrides` as the online prompt editor for the workflow. Keep `execute_model_calls=false` for dry-run request plans; set it to `true` only when the workflow should directly call OpenAI Responses API and xAI/Grok image generation with the runtime keys.
 
 ## Workflow
 
@@ -55,10 +55,12 @@ For the bundled Coze-style Python workflow, require runtime `grok_api_key` and `
 
 6. Generate text with OpenAI.
    - Use GPT5.5 ultra-high reasoning mode when available/configured.
+   - In the Python workflow, `ultra_high` maps to OpenAI API `reasoning.effort=xhigh`.
    - Produce title options, page-by-page card script, caption, CTA, and a visual brief for the image model.
 
 7. Generate a Grok Expert image set.
    - Produce 3:4 vertical cartoon prompts for each card page.
+   - Use the configured xAI image model, defaulting to `grok-imagine-image-quality`, while keeping `grok_image_mode=Expert` as the workflow mode.
    - Use reference image notes to define character, color, line, lens, mood, and composition rules.
    - Keep the image set visually consistent across pages.
 

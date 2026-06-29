@@ -77,9 +77,9 @@
 - `prompt_overrides`：在线修改工作流提示词，支持 `topic_selection`、`openai_text_description`、`grok_expert_image_set`、`final_review`。
 - `openai_text_model`：默认 `gpt-5.5`，用于 OpenAI 文案节点。
 - `openai_reasoning_mode`：默认 `ultra_high`，用于 GPT5.5 超高推理模式。
-- `grok_image_model`：默认 `grok-expert`，用于 Grok Expert 生图节点。
+- `grok_image_model`：默认 `grok-imagine-image-quality`，用于 Grok Expert/xAI 生图节点。
 - `grok_image_mode`：默认 `Expert`。
-- `execute_model_calls`：默认 `false`，本地只生成请求计划；线上 Coze 可接入真实模型节点。
+- `execute_model_calls`：默认 `false`，只生成可审核请求计划；设为 `true` 时直接调用 OpenAI Responses API 和 xAI/Grok 图片生成 API，并把状态或图片 URL 写入结果。API Key 只放在运行时请求头里，不写入输出。
 
 没有对标或评论素材时，工作流会先生成一版研究框架和采样清单，不伪造真实平台数据。
 
@@ -129,7 +129,8 @@
 
 职责：
 
-- 使用 `openai_text_model` 和 `openai_reasoning_mode` 生成文字描述请求计划。
+- 使用 `openai_text_model` 和 `openai_reasoning_mode` 生成文字描述；默认 `ultra_high` 会映射为 OpenAI API 的 `reasoning.effort=xhigh`。
+- `execute_model_calls=false` 时只输出可审核请求计划；`true` 时真实请求 `https://api.openai.com/v1/responses`。
 - 输出封面标题、每页脚本、小红书正文、给 Grok 的视觉 brief。
 
 ### 6. Grok Expert 3:4 卡通套图节点
@@ -139,6 +140,7 @@
 职责：
 
 - 使用 `grok_image_model` 和 `grok_image_mode` 为每页生成 3:4 竖版卡通图提示词。
+- `execute_model_calls=false` 时只输出图片请求计划；`true` 时真实请求 `https://api.x.ai/v1/images/generations` 并回填 `image_url`。
 - 继承参考图规则、套图一致性规则和避免事项。
 
 ### 7. 结果审核打包节点
@@ -162,8 +164,8 @@
 - `selected_topic`：本轮选中的高潜选题。
 - `image_style_rules`：3:4 卡通套图规则。
 - `editable_prompts`：在线可修改提示词。
-- `openai_text_package`：OpenAI GPT5.5 文案包与请求计划。
-- `grok_image_set`：Grok Expert 套图提示与请求计划。
+- `openai_text_package`：OpenAI GPT5.5 文案包、请求计划或真实调用状态。
+- `grok_image_set`：Grok Expert 套图提示、请求计划或真实图片 URL。
 - `card_package`：图文卡片成品规格。
 - `next_commands`：继续使用 skill/workflow 的短指令。
 
@@ -198,6 +200,7 @@ result = main_graph.invoke({
     "image_count": 6,
     "image_aspect_ratio": "3:4",
     "image_style": "cartoon",
+    "execute_model_calls": False,
     "reference_image_notes": ["圆润线条", "明亮但不刺眼", "主角表情夸张但不幼稚"],
     "prompt_overrides": {
         "grok_expert_image_set": "生成 3:4 竖版卡通套图，统一角色、统一色板、每页只表达一个核心动作。"
