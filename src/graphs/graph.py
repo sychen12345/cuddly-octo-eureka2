@@ -1,65 +1,26 @@
 """
-主工作流编排
-执行流程：
-    GraphInput → model_select → greeting → [task1, task2] → process → GraphOutput
+小红书内容工作流 - 主图编排。
 
-其中 task1 和 task2 是并行执行的，两个都完成后才进入 process 汇聚。
+GraphInput -> 对标与需求挖掘 -> 选题库与图文卡片 -> GraphOutput
 """
-from langgraph.graph import StateGraph, END
+from langgraph.graph import END, StateGraph
 
-from graphs.state import (
-    GlobalState,
-    GraphInput,
-    GraphOutput,
-)
-from graphs.nodes.model_select_node import model_select_node
-from graphs.nodes.greeting_node import greeting_node
-from graphs.nodes.task1_node import task1_node
-from graphs.nodes.task2_node import task2_node
-from graphs.nodes.process_node import process_node
+from graphs.state import GlobalState, GraphInput, GraphOutput
+from graphs.nodes.benchmark_demand_node import benchmark_demand_node
+from graphs.nodes.topic_card_node import topic_card_node
 
 
-# 创建状态图
 builder = StateGraph(
     GlobalState,
     input_schema=GraphInput,
-    output_schema=GraphOutput
+    output_schema=GraphOutput,
 )
 
-# ============= 添加节点 =============
-builder.add_node(
-    "model_select",
-    model_select_node,
-    metadata={"type": "agent", "llm_cfg": "config/model_select_cfg.json"}
-)
-builder.add_node(
-    "greeting",
-    greeting_node,
-    metadata={"type": "agent", "llm_cfg": "config/greeting_cfg.json"}
-)
-builder.add_node("task1", task1_node)
-builder.add_node("task2", task2_node)
-builder.add_node(
-    "process",
-    process_node,
-    metadata={"type": "agent", "llm_cfg": "config/process_cfg.json"}
-)
+builder.add_node("benchmark_and_demand", benchmark_demand_node)
+builder.add_node("topic_and_card", topic_card_node)
 
-# ============= 设置工作流执行路径 =============
-builder.set_entry_point("model_select")
+builder.set_entry_point("benchmark_and_demand")
+builder.add_edge("benchmark_and_demand", "topic_and_card")
+builder.add_edge("topic_and_card", END)
 
-# 串行链路
-builder.add_edge("model_select", "greeting")
-
-# 并行分支：greeting 后分叉到 task1 和 task2
-builder.add_edge("greeting", "task1")
-builder.add_edge("greeting", "task2")
-
-# 汇聚：两个并行分支都完成后才执行 process
-builder.add_edge(["task1", "task2"], "process")
-
-# 后续链路
-builder.add_edge("process", END)
-
-# ============= 编译图 =============
 main_graph = builder.compile()
