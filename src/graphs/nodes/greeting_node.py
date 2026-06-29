@@ -1,10 +1,15 @@
 """
 问候生成节点
-示例节点：根据用户名称和风格生成问候消息
+Agent节点：调用大模型根据用户名称和风格生成个性化问候消息
 """
+import os
+import json
+from jinja2 import Template
+from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.runtime import Runtime
 from coze_coding_utils.runtime_ctx.context import Context
+from coze_coding_dev_sdk import LLMClient
 
 from graphs.state import GreetingNodeInput, GreetingNodeOutput
 
@@ -16,21 +21,57 @@ def greeting_node(
 ) -> GreetingNodeOutput:
     """
     title: 问候生成
-    desc: 根据用户名称和推荐的问候风格，生成个性化的问候消息
-    integrations: 
+    desc: 调用大模型根据用户名称和问候风格，生成个性化问候消息
+    integrations: 大语言模型
     """
     ctx = runtime.context
 
-    user_name = state.user_name
-    style = state.greeting_style
+    # 读取配置文件
+    cfg_path = os.path.join(
+        os.getenv("COZE_WORKSPACE_PATH"),
+        config['metadata']['llm_cfg']
+    )
+    with open(cfg_path, 'r') as f:
+        cfg = json.load(f)
 
-    # 根据风格生成不同的问候语
-    style_map = {
-        "热情": f"🎉 嗨！{user_name}，欢迎欢迎！今天也要元气满满哦！",
-        "简洁": f"你好，{user_name}，欢迎。",
-        "正式": f"尊敬的{user_name}，您好！很荣幸为您服务。",
-        "幽默": f"哟～{user_name}来了！今天又有什么有趣的事？😄",
-    }
-    greeting = style_map.get(style, f"你好，{user_name}！欢迎使用工作流模板。")
+    llm_config: dict = cfg.get("config", {})
+    sp: str = cfg.get("sp", "")
+    up_template: str = cfg.get("up", "")
 
-    return GreetingNodeOutput(greeting_message=greeting)
+    # 渲染用户提示词
+    up = Template(up_template).render(
+        user_name=state.user_name,
+        greeting_style=state.greeting_style
+    )
+
+    # 调用大模型
+    client = LLMClient(ctx=ctx)
+    messages = [
+        SystemMessage(content=sp),
+        HumanMessage(content=up)
+    ]
+    response = client.invoke(
+        messages=messages,
+        model=llm_config.get("model", "doubao-seed-2-0-lite-260215"),
+        temperature=float(llm_config.get("temperature", 0.8)),
+        top_p=float(llm_config.get("top_p", 0.9)),
+        max_completion_tokens=int(llm_config.get("max_completion_tokens", 200)),
+        thinking=llm_config.get("thinking", "disabled")
+    )
+
+    # 安全提取文本
+    content: str = ""
+    if isinstance(response.content, str):
+        content = response.content.strip()
+    elif isinstance(response.content, list):
+        parts: list[str] = []
+        for item in response.content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict) and item.get("type") == "text":
+                text_val = item.get("text", "")
+                if isinstance(text_val, str):
+                    parts.append(text_val)
+        content = "".join(parts).strip()
+
+    return GreetingNodeOutput(greeting_message=content)

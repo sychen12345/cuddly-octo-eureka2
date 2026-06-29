@@ -1,35 +1,30 @@
 ## 项目概述
-- **名称**: 工作流模板
-- **功能**: 展示 Agent 节点 + 任务节点的完整工作流模板，包含模型选取、问候生成、结果处理
+- **名称**: 工作流模板（含并行分支）
+- **功能**: 展示 Agent 节点 + 并行 API 调用 + 汇聚节点的完整工作流模板
 
 ### 节点清单
 | 节点名 | 文件位置 | 类型 | 功能描述 | 分支逻辑 | 配置文件 |
 |-------|---------|------|---------|---------|---------|
 | model_select | `nodes/model_select_node.py` | agent | 调用大模型根据用户名称推荐问候风格 | - | `config/model_select_cfg.json` |
-| greeting | `nodes/greeting_node.py` | task | 根据名称和风格生成个性化问候 | - | - |
-| process | `nodes/process_node.py` | task | 处理问候消息生成最终结果 | - | - |
+| greeting | `nodes/greeting_node.py` | agent | 调用大模型根据名称和风格生成个性化问候 | - | `config/greeting_cfg.json` |
+| grok_call | `nodes/grok_node.py` | task | 调用 Grok API 分析问候语质量 | - | - |
+| openai_call | `nodes/openai_node.py` | task | 调用 OpenAI API 分析问候语质量 | - | - |
+| merge | `nodes/merge_node.py` | agent | 调用大模型对比合并两个模型的分析结果 | - | `config/merge_cfg.json` |
+| process | `nodes/process_node.py` | agent | 调用大模型整合问候和分析为最终输出 | - | `config/process_cfg.json` |
 
 **类型说明**: task(任务节点) / agent(大模型) / condition(条件分支) / looparray(列表循环) / loopcond(条件循环)
+
+## 并行分支
+- `grok_call` 和 `openai_call` 为并行分支，在 `greeting` 之后同时执行
+- 两者都完成后由 `merge` 节点汇聚结果
 
 ## 子图清单
 暂无子图
 
 ## 技能使用
-- 节点 `model_select` 使用大语言模型技能
+- 节点 `model_select`、`greeting`、`merge`、`process` 使用大语言模型技能
 
-## 快速开始
-1. 查看状态定义：`src/graphs/state.py`
-2. 查看节点实现：`src/graphs/nodes/`
-3. 查看工作流编排：`src/graphs/graph.py`
-4. 运行测试：传入 user_name 执行 test_run
-
-## 扩展指南
-### 添加新节点
-1. 在 `src/graphs/state.py` 中定义节点的 Input/Output
-2. 在 `src/graphs/nodes/` 中创建节点文件
-3. 在 `src/graphs/graph.py` 中注册节点并添加边
-
-### 添加 Agent 节点
-1. 在 `config/` 中创建 LLM 配置文件（参考 model_select_cfg.json）
-2. 在节点函数中使用 LLMClient 调用大模型
-3. 注册节点时添加 `metadata={"type": "agent", "llm_cfg": "config/xxx.json"}`
+## 环境变量
+使用前需配置以下环境变量：
+- `GROK_API_KEY`：xAI Grok API Key
+- `OPENAI_API_KEY`：OpenAI API Key

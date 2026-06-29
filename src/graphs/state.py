@@ -12,6 +12,9 @@ class GlobalState(BaseModel):
     user_name: str = Field(default="", description="用户名称")
     greeting_style: str = Field(default="", description="大模型推荐的问候风格")
     greeting_message: str = Field(default="", description="生成的问候消息")
+    grok_result: str = Field(default="", description="Grok API 返回结果")
+    openai_result: str = Field(default="", description="OpenAI API 返回结果")
+    merged_analysis: str = Field(default="", description="合并后的分析结果")
     processed_result: str = Field(default="", description="处理后的最终结果")
 
 
@@ -50,12 +53,47 @@ class GreetingNodeOutput(BaseModel):
     greeting_message: str = Field(..., description="生成的问候消息")
 
 
-# 示例节点2: 结果处理节点
+# 并行节点: Grok API 调用
+class GrokNodeInput(BaseModel):
+    """Grok 节点的输入"""
+    greeting_message: str = Field(..., description="问候消息，作为 Grok 分析的输入")
+
+
+class GrokNodeOutput(BaseModel):
+    """Grok 节点的输出"""
+    grok_result: str = Field(..., description="Grok API 返回的分析结果")
+
+
+# 并行节点: OpenAI API 调用
+class OpenAINodeInput(BaseModel):
+    """OpenAI 节点的输入"""
+    greeting_message: str = Field(..., description="问候消息，作为 OpenAI 分析的输入")
+
+
+class OpenAINodeOutput(BaseModel):
+    """OpenAI 节点的输出"""
+    openai_result: str = Field(..., description="OpenAI API 返回的分析结果")
+
+
+# 汇聚节点: 合并分析结果
+class MergeNodeInput(BaseModel):
+    """合并节点的输入"""
+    grok_result: str = Field(..., description="Grok 分析结果")
+    openai_result: str = Field(..., description="OpenAI 分析结果")
+
+
+class MergeNodeOutput(BaseModel):
+    """合并节点的输出"""
+    merged_analysis: str = Field(..., description="合并后的分析结果")
+
+
+# 结果处理节点
 class ProcessNodeInput(BaseModel):
     """结果处理节点的输入"""
     greeting_message: str = Field(..., description="问候消息")
+    merged_analysis: str = Field(..., description="合并后的分析结果")
 
 
 class ProcessNodeOutput(BaseModel):
     """结果处理节点的输出"""
-    processed_result: str = Field(..., description="处理后的结果")
+    processed_result: str = Field(..., description="处理后的最终结果")

@@ -1,6 +1,6 @@
 """
-结果处理节点
-Agent节点：调用大模型将问候消息和分析评价整合为格式化的最终输出
+合并分析结果节点
+Agent节点：调用大模型将 Grok 和 OpenAI 两个并行分支的分析结果智能合并
 """
 import os
 import json
@@ -11,17 +11,17 @@ from langgraph.runtime import Runtime
 from coze_coding_utils.runtime_ctx.context import Context
 from coze_coding_dev_sdk import LLMClient
 
-from graphs.state import ProcessNodeInput, ProcessNodeOutput
+from graphs.state import MergeNodeInput, MergeNodeOutput
 
 
-def process_node(
-    state: ProcessNodeInput,
+def merge_node(
+    state: MergeNodeInput,
     config: RunnableConfig,
     runtime: Runtime[Context]
-) -> ProcessNodeOutput:
+) -> MergeNodeOutput:
     """
-    title: 结果处理
-    desc: 调用大模型将问候消息和分析评价整合为结构清晰、格式统一的最终输出
+    title: 结果合并
+    desc: 调用大模型将 Grok 和 OpenAI 两个模型的分析结果进行对比和智能合并
     integrations: 大语言模型
     """
     ctx = runtime.context
@@ -40,8 +40,8 @@ def process_node(
 
     # 渲染用户提示词
     up = Template(up_template).render(
-        greeting_message=state.greeting_message,
-        merged_analysis=state.merged_analysis
+        grok_result=state.grok_result,
+        openai_result=state.openai_result
     )
 
     # 调用大模型
@@ -53,9 +53,9 @@ def process_node(
     response = client.invoke(
         messages=messages,
         model=llm_config.get("model", "doubao-seed-2-0-lite-260215"),
-        temperature=float(llm_config.get("temperature", 0.3)),
+        temperature=float(llm_config.get("temperature", 0.5)),
         top_p=float(llm_config.get("top_p", 0.9)),
-        max_completion_tokens=int(llm_config.get("max_completion_tokens", 500)),
+        max_completion_tokens=int(llm_config.get("max_completion_tokens", 300)),
         thinking=llm_config.get("thinking", "disabled")
     )
 
@@ -74,4 +74,4 @@ def process_node(
                     parts.append(text_val)
         content = "".join(parts).strip()
 
-    return ProcessNodeOutput(processed_result=content)
+    return MergeNodeOutput(merged_analysis=content)
