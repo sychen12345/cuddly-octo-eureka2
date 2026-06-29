@@ -1,8 +1,8 @@
 """
-选题库与图文卡片生成节点。
+选题库与高浏览选题节点。
 
-该节点消费上游的对标与评论洞察，输出可沉淀的选题库，以及一组可直接
-交给设计或生图工具继续制作的小红书图文卡片规格。
+该节点只负责选题：把评论需求、对标结构和浏览量/热词线索沉淀为选题库，
+再选出本轮最值得交给 OpenAI 写文案、Grok 生成套图的高潜选题。
 """
 from __future__ import annotations
 
@@ -24,23 +24,9 @@ except ImportError:  # pragma: no cover - local fallback
     Context = Any  # type: ignore
 
 try:
-    from graphs.state import (
-        CardPackage,
-        CardPage,
-        DemandInsight,
-        ProcessNodeInput,
-        ProcessNodeOutput,
-        TopicRecord,
-    )
+    from graphs.state import ProcessNodeInput, ProcessNodeOutput, TopicRecord
 except ImportError:
-    from .state import (
-        CardPackage,
-        CardPage,
-        DemandInsight,
-        ProcessNodeInput,
-        ProcessNodeOutput,
-        TopicRecord,
-    )
+    from .state import ProcessNodeInput, ProcessNodeOutput, TopicRecord
 
 
 def _get(state: Any, key: str, default: Any = None) -> Any:
@@ -70,19 +56,30 @@ def _as_list(value: Any) -> List[str]:
     return [str(value).strip()]
 
 
-def _clean_hashtag(text: str) -> str:
-    cleaned = "".join(ch for ch in text if ch.isalnum() or ch in ["_", "-"])
-    return f"#{cleaned}" if cleaned else "#小红书运营"
-
-
 def _insight_text(insight: Any, key: str, default: str = "") -> str:
-    data = _dump(insight)
-    return str(data.get(key, default)).strip()
+    return str(_dump(insight).get(key, default)).strip()
 
 
 def _insight_words(insight: Any) -> List[str]:
-    data = _dump(insight)
-    return _as_list(data.get("user_words", []))
+    return _as_list(_dump(insight).get("user_words", []))
+
+
+def _view_boost(title: str, evidence: List[str]) -> tuple[int, List[str]]:
+    score = 0
+    reasons: List[str] = []
+    joined = " ".join([title, *evidence])
+    high_view_terms = ["浏览", "爆", "高赞", "收藏", "评论", "热词", "搜索", "近期", "起号"]
+    for term in high_view_terms:
+        if term in joined:
+            score += 4
+            reasons.append(f"包含高浏览信号：{term}")
+    for raw in evidence:
+        digits = "".join(ch for ch in raw if ch.isdigit())
+        if digits and int(digits[:6]) >= 1000:
+            score += 8
+            reasons.append(f"含可量化热度线索：{raw[:36]}")
+            break
+    return min(score, 24), reasons[:4]
 
 
 def _topic_for_insight(
@@ -90,12 +87,12 @@ def _topic_for_insight(
     audience: str,
     insight: Any,
     index: int,
+    view_evidence: List[str],
 ) -> TopicRecord:
     cluster = _insight_text(insight, "cluster", "核心需求")
     angle = _insight_text(insight, "content_angle", "把需求拆成可执行步骤")
     confidence = _insight_text(insight, "confidence", "medium")
     source_words = _insight_words(insight)
-    priority = "high" if confidence == "high" or index == 1 else "medium"
 
     title_map = {
         "新手门槛": f"零基础做「{niche}」，先别学一堆工具",
@@ -107,10 +104,18 @@ def _topic_for_insight(
         "待采样评论": f"想做「{niche}」，先去评论区验证这 5 个问题",
     }
     title = title_map.get(cluster, f"「{niche}」新手最常问的 {index} 个问题")
+    demand_source = cluster if not source_words else f"{cluster}: {' / '.join(source_words[:2])}"
 
-    demand_source = cluster
-    if source_words:
-        demand_source = f"{cluster}: {' / '.join(source_words[:2])}"
+    confidence_score = {"high": 20, "medium": 12, "low": 5}.get(confidence, 10)
+    view_score, view_reasons = _view_boost(title, view_evidence)
+    priority_bonus = max(0, 10 - index)
+    expected_view_score = min(100, 48 + confidence_score + view_score + priority_bonus)
+
+    view_evidence_out = [
+        *view_reasons,
+        f"需求来源：{demand_source}",
+        f"适合内容角度：{angle}",
+    ]
 
     return TopicRecord(
         title=title,
@@ -125,145 +130,55 @@ def _topic_for_insight(
             "用轻 CTA 引导收藏、评论或领取清单",
         ],
         proof_needed=[
-            "至少 3 条真实评论或私信截图",
-            "1-2 个对标笔记结构拆解",
-            "发布前补充个人实践、案例或工具截图",
+            "真实评论或私信截图",
+            "对标笔记标题与结构拆解",
+            "浏览量、收藏、评论或搜索热词证据",
         ],
-        differentiation="从用户原话出发重组结构，不复刻对标标题和正文。",
-        priority=priority,
+        differentiation="从用户原话和热度证据重组选题，不复刻对标标题和正文。",
+        priority="high" if expected_view_score >= 76 else "medium",
+        expected_view_score=expected_view_score,
+        view_evidence=view_evidence_out,
     )
 
 
-def _fallback_topic(niche: str, audience: str) -> TopicRecord:
+def _fallback_topic(niche: str, audience: str, view_evidence: List[str]) -> TopicRecord:
+    view_score, view_reasons = _view_boost(niche, view_evidence)
     return TopicRecord(
         title=f"普通人做「{niche}」，先完成这 3 步验证",
         audience=audience,
         hook=f"别急着开干，先确认「{niche}」有没有真实需求。",
         demand_source="缺少评论样本时的默认验证选题",
         outline=[
-            "找 5 篇近期对标内容，记录标题和评论",
+            "找 5 篇近期对标内容，记录标题、浏览量和评论",
             "把评论按新手门槛、路径不清、资源请求分类",
-            "选一个最清晰的痛点做首篇图文",
+            "选一个热度和痛点都清晰的主题做首篇图文",
             "发布后继续收集评论修正选题库",
         ],
-        proof_needed=["对标截图", "评论样本", "自己的执行记录"],
+        proof_needed=["对标截图", "评论样本", "浏览量或收藏证据"],
         differentiation="把方法写成验证流程，而不是承诺结果。",
         priority="medium",
+        expected_view_score=58 + view_score,
+        view_evidence=view_reasons or ["缺少浏览量证据，建议用户补充或手动指定选题"],
     )
 
 
-def _build_topic_bank(niche: str, audience: str, insights: List[Any]) -> List[TopicRecord]:
-    topics = [
-        _topic_for_insight(niche, audience, insight, index)
-        for index, insight in enumerate(insights[:5], start=1)
-    ]
-    if not topics:
-        topics.append(_fallback_topic(niche, audience))
-    return topics
+def _select_topic(topics: List[TopicRecord], user_selected_topic: str) -> TopicRecord:
+    if user_selected_topic:
+        for topic in topics:
+            if user_selected_topic in topic.title or topic.title in user_selected_topic:
+                topic.selected = True
+                topic.selection_reason = "用户指定选题，优先进入生产链路。"
+                return topic
+        custom = topics[0].model_copy() if hasattr(topics[0], "model_copy") else topics[0].copy()
+        custom.title = user_selected_topic
+        custom.selected = True
+        custom.selection_reason = "用户指定了新选题，沿用最高分选题的需求和证据框架。"
+        return custom
 
-
-def _card_pages(topic: TopicRecord, niche: str, count: int, voice: str) -> List[CardPage]:
-    count = max(3, min(count or 6, 8))
-    blueprints = [
-        (
-            topic.title,
-            topic.hook,
-            "封面，大字标题，干净背景，突出目标人群和核心承诺",
-        ),
-        (
-            "先看真实卡点",
-            f"这类需求不是缺工具，而是缺顺序：{topic.demand_source}",
-            "评论气泡或便签墙，把用户原话做匿名化展示",
-        ),
-        (
-            "别一上来就做大项目",
-            "先用一篇笔记验证：有没有人收藏、追问、要清单。",
-            "错误路径与正确路径左右对比",
-        ),
-        (
-            "3 步开始",
-            "1. 找对标结构\n2. 挖评论需求\n3. 做一个可收藏清单",
-            "编号清单卡片，使用清晰图标和留白",
-        ),
-        (
-            "发布前补证据",
-            "至少准备评论截图、对标拆解、自己的执行记录，避免空口承诺。",
-            "证据清单、截图占位、勾选框",
-        ),
-        (
-            "下一步",
-            f"按「{voice}」的语气，把这篇做成一套可复用模板。",
-            "结尾页，轻 CTA，提示收藏或评论关键词",
-        ),
-        (
-            "选题库沉淀",
-            "把标题、需求来源、证明材料、差异化写回知识库。",
-            "表格或数据库视图风格",
-        ),
-        (
-            "复盘指标",
-            "看收藏、评论问题和私信关键词，再决定下一篇写什么。",
-            "简洁数据看板，不展示虚构数据",
-        ),
-    ]
-
-    return [
-        CardPage(
-            page=index,
-            headline=headline,
-            body=body,
-            visual_prompt=f"{visual}；小红书图文卡片；短句；层级清楚；领域：{niche}",
-        )
-        for index, (headline, body, visual) in enumerate(blueprints[:count], start=1)
-    ]
-
-
-def _build_card_package(
-    topic: TopicRecord,
-    niche: str,
-    audience: str,
-    constraints: List[str],
-    voice: str,
-    card_count: int,
-) -> CardPackage:
-    cover_options = [
-        topic.title,
-        f"{audience}做「{niche}」，先别急着发笔记",
-        f"评论区问爆的「{niche}」问题，我拆成 3 步",
-        f"想做「{niche}」，先存这份验证清单",
-    ]
-    cards = _card_pages(topic, niche, card_count, voice)
-    constraint_text = "；".join(constraints) if constraints else "不承诺收益，不虚构数据"
-    caption = (
-        f"很多人想做「{niche}」，但第一步就卡住。我的建议是先别追工具，"
-        f"先从对标结构和评论区需求里找证据。\\n\\n"
-        f"这篇按「{topic.demand_source}」拆成了可执行步骤，适合{audience}先收藏，"
-        f"再用自己的素材补证据。\\n\\n"
-        f"发布前提醒：{constraint_text}。"
-    )
-    hashtags = [
-        _clean_hashtag(niche),
-        "#小红书运营",
-        "#内容选题",
-        "#对标分析",
-        "#评论区需求",
-        "#图文笔记",
-    ]
-    return CardPackage(
-        topic_title=topic.title,
-        cover_options=cover_options,
-        cards=cards,
-        caption=caption,
-        hashtags=hashtags,
-        cta="想继续做的话，把你的对标标题和评论原话贴进来，我会继续扩成下一组卡片。",
-        review_checklist=[
-            "是否所有真实数据都有来源",
-            "是否没有承诺阅读量、涨粉或收益",
-            "是否只学习对标结构，没有复制原文",
-            "是否每页卡片只有一个核心信息",
-            "是否保留了下一轮评论采样入口",
-        ],
-    )
+    selected = max(topics, key=lambda item: item.expected_view_score)
+    selected.selected = True
+    selected.selection_reason = "未指定选题，自动选择预估浏览潜力最高的选题。"
+    return selected
 
 
 def process_node(
@@ -272,44 +187,29 @@ def process_node(
     runtime: Runtime[Context] | None = None,
 ) -> ProcessNodeOutput:
     """
-    title: 选题库与图文卡片
-    desc: 将对标和评论需求沉淀为选题库，并生成图文卡片规格
+    title: 选题库与高浏览选题
+    desc: 构建选题库，结合浏览量/热词证据或用户指定选出本轮主题
     integrations:
     """
     niche = str(_get(state, "niche", "")).strip()
     audience = str(_get(state, "audience", "小红书新手用户")).strip()
-    constraints = _as_list(_get(state, "constraints", []))
-    voice = str(_get(state, "brand_voice", "清醒、实操、少废话")).strip()
-    card_count = int(_get(state, "card_count", 6) or 6)
     insights = list(_get(state, "demand_insights", []) or [])
-    benchmarks = list(_get(state, "benchmark_accounts", []) or [])
+    topic_research_notes = _as_list(_get(state, "topic_research_notes", []))
+    benchmark_notes = _as_list(_get(state, "benchmark_notes", []))
+    user_selected_topic = str(_get(state, "user_selected_topic", "")).strip()
+    view_evidence = [*topic_research_notes, *benchmark_notes]
 
-    topic_bank = _build_topic_bank(niche, audience, insights)
-    selected_topic = topic_bank[0]
-    card_package = _build_card_package(
-        selected_topic,
-        niche=niche,
-        audience=audience,
-        constraints=constraints,
-        voice=voice,
-        card_count=card_count,
-    )
-
-    workflow_summary = (
-        f"已完成「{niche}」内容工作流：整理 {len(benchmarks)} 条对标线索、"
-        f"{len(insights)} 组评论需求，沉淀 {len(topic_bank)} 个选题，"
-        f"并生成 {len(card_package.cards)} 页图文卡片规格。"
-    )
-    next_commands = [
-        f"继续扩写「{selected_topic.title}」，生成更口语化的 {card_count} 页卡片文案。",
-        f"把「{niche}」的评论需求整理成 Obsidian 选题库 Markdown。",
-        "补充 5 条真实评论和 3 个对标标题，重新排序选题优先级。",
-        "把当前卡片包改成更强封面标题和更短页面正文。",
+    topic_bank = [
+        _topic_for_insight(niche, audience, insight, index, view_evidence)
+        for index, insight in enumerate(insights[:6], start=1)
     ]
+    if not topic_bank:
+        topic_bank.append(_fallback_topic(niche, audience, view_evidence))
 
-    return ProcessNodeOutput(
-        topic_bank=topic_bank,
-        card_package=card_package,
-        workflow_summary=workflow_summary,
-        next_commands=next_commands,
-    )
+    selected_topic = _select_topic(topic_bank, user_selected_topic)
+    for topic in topic_bank:
+        if topic.title == selected_topic.title:
+            topic.selected = True
+            topic.selection_reason = selected_topic.selection_reason
+
+    return ProcessNodeOutput(topic_bank=topic_bank, selected_topic=selected_topic)

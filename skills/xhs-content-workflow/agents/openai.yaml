@@ -1,4 +1,4 @@
 interface:
   display_name: "XHS Content Workflow"
-  short_description: "Benchmark-to-card workflow for Xiaohongshu content"
-  default_prompt: "Use $xhs-content-workflow to turn a niche, benchmark notes, and comment notes into a topic bank and Xiaohongshu card package."
+  short_description: "High-view XHS topics, GPT text, Grok cartoon sets"
+  default_prompt: "Use $xhs-content-workflow to choose a high-view Xiaohongshu topic, edit prompts, draft OpenAI text, and create Grok 3:4 cartoon image prompts."

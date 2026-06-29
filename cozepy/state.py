@@ -1,10 +1,11 @@
 """
 小红书内容工作流状态定义。
 
-这个文件映射 Coze 低代码工作流中的开始节点、业务节点和结束节点：
-开始节点接收用户输入，业务节点逐步补充状态，结束节点返回结构化结果。
+这个版本按完整 Coze 画布拆分为多节点：
+开始 -> 对标与需求挖掘 -> 选题库与高浏览选题 -> Skill规则与参考图
+-> 在线提示词编辑 -> OpenAI GPT5.5 文案 -> Grok Expert 套图 -> 结果审核打包 -> 结束。
 """
-from typing import List
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field
 
@@ -15,18 +16,9 @@ class BenchmarkAccount(BaseModel):
     name: str = Field(..., description="账号名、笔记名或对标线索标签")
     platform: str = Field(default="小红书", description="平台")
     signal: str = Field(..., description="选择该对标的原因或信号")
-    content_patterns: List[str] = Field(
-        default_factory=list,
-        description="可学习的标题、开头、正文、证明、CTA 等结构",
-    )
-    visual_patterns: List[str] = Field(
-        default_factory=list,
-        description="封面、排版、截图、卡片风格等视觉结构",
-    )
-    risk_notes: List[str] = Field(
-        default_factory=list,
-        description="需要避免复制或需要补充验证的地方",
-    )
+    content_patterns: List[str] = Field(default_factory=list, description="可学习的内容结构")
+    visual_patterns: List[str] = Field(default_factory=list, description="可学习的视觉结构")
+    risk_notes: List[str] = Field(default_factory=list, description="需要避免复制或补充验证的地方")
 
 
 class DemandInsight(BaseModel):
@@ -51,6 +43,86 @@ class TopicRecord(BaseModel):
     proof_needed: List[str] = Field(default_factory=list, description="发布前需要补充的证据")
     differentiation: str = Field(..., description="和对标内容的差异点")
     priority: str = Field(default="medium", description="优先级：high/medium/low")
+    expected_view_score: int = Field(default=60, description="预估浏览潜力分，0-100")
+    view_evidence: List[str] = Field(default_factory=list, description="浏览潜力依据")
+    selected: bool = Field(default=False, description="是否被选为本轮生产选题")
+    selection_reason: str = Field(default="", description="选择原因")
+
+
+class ImageStyleRule(BaseModel):
+    """Grok 套图生成规则。"""
+
+    aspect_ratio: str = Field(default="3:4", description="图片比例")
+    style: str = Field(default="cartoon", description="图片风格")
+    reference_image_notes: List[str] = Field(default_factory=list, description="参考图观察记录")
+    reference_image_urls: List[str] = Field(default_factory=list, description="参考图链接")
+    must_have: List[str] = Field(default_factory=list, description="必须保持的视觉规则")
+    avoid: List[str] = Field(default_factory=list, description="必须避免的视觉问题")
+    consistency_rules: List[str] = Field(default_factory=list, description="套图一致性规则")
+
+
+class EditablePrompt(BaseModel):
+    """在线可修改的提示词块。"""
+
+    key: str = Field(..., description="提示词键名，用于 prompt_overrides 覆盖")
+    title: str = Field(..., description="提示词标题")
+    target_model: str = Field(..., description="目标模型或节点")
+    default_prompt: str = Field(..., description="默认提示词")
+    final_prompt: str = Field(..., description="应用用户覆盖后的最终提示词")
+    editable: bool = Field(default=True, description="是否允许在线编辑")
+
+
+class ModelRequest(BaseModel):
+    """模型调用计划。默认 dry_run，避免测试时产生真实费用。"""
+
+    provider: str = Field(..., description="模型供应商")
+    model: str = Field(..., description="模型名")
+    mode: str = Field(default="", description="推理/生成模式")
+    endpoint: str = Field(default="", description="建议 API endpoint")
+    prompt_key: str = Field(default="", description="关联提示词键名")
+    payload: Dict[str, Any] = Field(default_factory=dict, description="建议请求载荷")
+    dry_run: bool = Field(default=True, description="是否仅生成请求计划")
+    status: str = Field(default="planned", description="planned/dry_run/ready")
+
+
+class TextDescriptionPackage(BaseModel):
+    """OpenAI 文字描述结果。"""
+
+    provider: str = Field(default="openai")
+    model: str = Field(default="gpt-5.5")
+    reasoning_mode: str = Field(default="ultra_high")
+    request: ModelRequest = Field(default_factory=lambda: ModelRequest(provider="openai", model="gpt-5.5"))
+    title_options: List[str] = Field(default_factory=list)
+    post_description: str = Field(default="", description="图文正文描述")
+    card_script: List[str] = Field(default_factory=list, description="每页图文脚本")
+    image_brief: str = Field(default="", description="给 Grok 的总视觉说明")
+    status: str = Field(default="dry_run", description="文字生成状态")
+
+
+class ImageGenerationItem(BaseModel):
+    """Grok Expert 套图中的单张图。"""
+
+    page: int = Field(..., description="页码")
+    headline: str = Field(..., description="该图承载的短标题")
+    prompt: str = Field(..., description="Grok Expert 生图提示词")
+    aspect_ratio: str = Field(default="3:4")
+    style: str = Field(default="cartoon")
+    request: ModelRequest = Field(default_factory=lambda: ModelRequest(provider="grok", model="grok-expert"))
+    image_url: str = Field(default="", description="真实调用后可填充的图片链接")
+    status: str = Field(default="dry_run")
+
+
+class ImageSetPackage(BaseModel):
+    """Grok Expert 生成的套图计划或结果。"""
+
+    provider: str = Field(default="grok")
+    model: str = Field(default="grok-expert")
+    mode: str = Field(default="Expert")
+    aspect_ratio: str = Field(default="3:4")
+    style: str = Field(default="cartoon")
+    images: List[ImageGenerationItem] = Field(default_factory=list)
+    consistency_rules: List[str] = Field(default_factory=list)
+    status: str = Field(default="dry_run")
 
 
 class CardPage(BaseModel):
@@ -71,10 +143,18 @@ class CardPackage(BaseModel):
     caption: str = Field(..., description="小红书正文")
     hashtags: List[str] = Field(default_factory=list, description="话题标签")
     cta: str = Field(..., description="软性行动引导")
-    review_checklist: List[str] = Field(
-        default_factory=list,
-        description="发布前审核清单",
-    )
+    review_checklist: List[str] = Field(default_factory=list, description="发布前审核清单")
+
+
+class WorkflowStep(BaseModel):
+    """用于在输出中直观看到完整 skill/Coze 流程。"""
+
+    node_key: str = Field(..., description="节点键名")
+    title: str = Field(..., description="节点标题")
+    model_or_tool: str = Field(default="", description="使用的模型或工具")
+    prompt_key: str = Field(default="", description="关联提示词")
+    output_keys: List[str] = Field(default_factory=list, description="该节点输出字段")
+    status: str = Field(default="ready", description="节点状态")
 
 
 # ============= 全局状态定义 =============
@@ -88,22 +168,42 @@ class GlobalState(BaseModel):
     goal: str = Field(default="生成小红书图文卡片", description="本轮目标")
     benchmark_notes: List[str] = Field(default_factory=list, description="对标素材")
     comment_notes: List[str] = Field(default_factory=list, description="评论或私信素材")
+    topic_research_notes: List[str] = Field(default_factory=list, description="浏览量、热词或选题证据")
+    user_selected_topic: str = Field(default="", description="用户指定选题")
     constraints: List[str] = Field(default_factory=list, description="限制条件")
     brand_voice: str = Field(default="清醒、实操、少废话", description="账号语气")
     card_count: int = Field(default=6, description="卡片页数")
+    image_count: int = Field(default=6, description="套图张数")
+    image_aspect_ratio: str = Field(default="3:4", description="图片比例")
+    image_style: str = Field(default="cartoon", description="图片风格")
+    reference_image_notes: List[str] = Field(default_factory=list, description="参考图规则")
+    reference_image_urls: List[str] = Field(default_factory=list, description="参考图链接")
+    prompt_overrides: Dict[str, str] = Field(default_factory=dict, description="在线提示词覆盖")
+    openai_text_model: str = Field(default="gpt-5.5", description="OpenAI 文案模型")
+    openai_reasoning_mode: str = Field(default="ultra_high", description="OpenAI 推理模式")
+    grok_image_model: str = Field(default="grok-expert", description="Grok 生图模型")
+    grok_image_mode: str = Field(default="Expert", description="Grok 生图模式")
+    execute_model_calls: bool = Field(default=False, description="是否真实调用模型 API")
 
     research_brief: str = Field(default="", description="对标与需求研究摘要")
     benchmark_accounts: List[BenchmarkAccount] = Field(default_factory=list)
     demand_insights: List[DemandInsight] = Field(default_factory=list)
     topic_bank: List[TopicRecord] = Field(default_factory=list)
-    card_package: CardPackage = Field(
-        default_factory=lambda: CardPackage(
-            topic_title="",
-            caption="",
-            cta="",
-        ),
-        description="图文卡片成品包",
+    selected_topic: TopicRecord = Field(
+        default_factory=lambda: TopicRecord(
+            title="",
+            audience="",
+            hook="",
+            demand_source="",
+            differentiation="",
+        )
     )
+    image_style_rules: ImageStyleRule = Field(default_factory=ImageStyleRule)
+    workflow_steps: List[WorkflowStep] = Field(default_factory=list)
+    editable_prompts: List[EditablePrompt] = Field(default_factory=list)
+    openai_text_package: TextDescriptionPackage = Field(default_factory=TextDescriptionPackage)
+    grok_image_set: ImageSetPackage = Field(default_factory=ImageSetPackage)
+    card_package: CardPackage = Field(default_factory=lambda: CardPackage(topic_title="", caption="", cta=""))
     workflow_summary: str = Field(default="", description="最终流程摘要")
     next_commands: List[str] = Field(default_factory=list, description="下一步指令")
 
@@ -112,59 +212,51 @@ class GlobalState(BaseModel):
 class GraphInput(BaseModel):
     """Coze 开始节点输入。"""
 
-    grok_api_key: str = Field(
-        ...,
-        repr=False,
-        description="运行时必须由用户输入的 Grok API Key；仅用于节点调用，不会出现在输出中",
-    )
-    openai_api_key: str = Field(
-        ...,
-        repr=False,
-        description="运行时必须由用户输入的 OpenAI API Key；仅用于节点调用，不会出现在输出中",
-    )
+    grok_api_key: str = Field(..., repr=False, description="运行时必须由用户输入的 Grok API Key")
+    openai_api_key: str = Field(..., repr=False, description="运行时必须由用户输入的 OpenAI API Key")
     niche: str = Field(..., description="领域或产品方向")
     audience: str = Field(default="小红书新手用户", description="目标人群")
     goal: str = Field(default="生成小红书图文卡片", description="本轮目标")
     benchmark_notes: List[str] = Field(default_factory=list, description="对标素材")
     comment_notes: List[str] = Field(default_factory=list, description="评论或私信素材")
+    topic_research_notes: List[str] = Field(default_factory=list, description="浏览量、热词或选题证据")
+    user_selected_topic: str = Field(default="", description="用户指定选题")
     constraints: List[str] = Field(default_factory=list, description="限制条件")
     brand_voice: str = Field(default="清醒、实操、少废话", description="账号语气")
     card_count: int = Field(default=6, description="卡片页数")
+    image_count: int = Field(default=6, description="套图张数")
+    image_aspect_ratio: str = Field(default="3:4", description="图片比例")
+    image_style: str = Field(default="cartoon", description="图片风格")
+    reference_image_notes: List[str] = Field(default_factory=list, description="参考图规则")
+    reference_image_urls: List[str] = Field(default_factory=list, description="参考图链接")
+    prompt_overrides: Dict[str, str] = Field(default_factory=dict, description="在线提示词覆盖")
+    openai_text_model: str = Field(default="gpt-5.5", description="OpenAI 文案模型")
+    openai_reasoning_mode: str = Field(default="ultra_high", description="OpenAI 推理模式")
+    grok_image_model: str = Field(default="grok-expert", description="Grok 生图模型")
+    grok_image_mode: str = Field(default="Expert", description="Grok 生图模式")
+    execute_model_calls: bool = Field(default=False, description="是否真实调用模型 API")
 
 
 class GraphOutput(BaseModel):
-    """Coze 结束节点输出。"""
+    """Coze 结束节点输出。注意不会输出 API Key。"""
 
     workflow_summary: str = Field(..., description="最终流程摘要")
+    workflow_steps: List[WorkflowStep] = Field(default_factory=list)
     benchmark_accounts: List[BenchmarkAccount] = Field(default_factory=list)
     demand_insights: List[DemandInsight] = Field(default_factory=list)
     topic_bank: List[TopicRecord] = Field(default_factory=list)
-    card_package: CardPackage = Field(..., description="图文卡片成品包")
+    selected_topic: TopicRecord = Field(..., description="本轮选中的高潜选题")
+    image_style_rules: ImageStyleRule = Field(..., description="3:4 卡通套图规则")
+    editable_prompts: List[EditablePrompt] = Field(default_factory=list)
+    openai_text_package: TextDescriptionPackage = Field(..., description="OpenAI GPT5.5 文案包")
+    grok_image_set: ImageSetPackage = Field(..., description="Grok Expert 套图计划或结果")
+    card_package: CardPackage = Field(..., description="最终图文卡片包")
     next_commands: List[str] = Field(default_factory=list)
 
 
 # ============= 节点的输入输出定义 =============
-class ResearchNodeInput(BaseModel):
+class ResearchNodeInput(GraphInput):
     """对标与需求挖掘节点输入。"""
-
-    grok_api_key: str = Field(
-        ...,
-        repr=False,
-        description="运行时必须由用户输入的 Grok API Key；仅用于节点调用，不会出现在输出中",
-    )
-    openai_api_key: str = Field(
-        ...,
-        repr=False,
-        description="运行时必须由用户输入的 OpenAI API Key；仅用于节点调用，不会出现在输出中",
-    )
-    niche: str = Field(..., description="领域或产品方向")
-    audience: str = Field(default="小红书新手用户", description="目标人群")
-    goal: str = Field(default="生成小红书图文卡片", description="本轮目标")
-    benchmark_notes: List[str] = Field(default_factory=list, description="对标素材")
-    comment_notes: List[str] = Field(default_factory=list, description="评论或私信素材")
-    constraints: List[str] = Field(default_factory=list, description="限制条件")
-    brand_voice: str = Field(default="清醒、实操、少废话", description="账号语气")
-    card_count: int = Field(default=6, description="卡片页数")
 
 
 class ResearchNodeOutput(BaseModel):
@@ -175,33 +267,72 @@ class ResearchNodeOutput(BaseModel):
     demand_insights: List[DemandInsight] = Field(default_factory=list)
 
 
-class ProcessNodeInput(BaseModel):
-    """选题库与图文卡片节点输入。"""
-
-    grok_api_key: str = Field(default="", repr=False, description="Grok API Key")
-    openai_api_key: str = Field(default="", repr=False, description="OpenAI API Key")
-    niche: str = Field(..., description="领域或产品方向")
-    audience: str = Field(default="小红书新手用户", description="目标人群")
-    goal: str = Field(default="生成小红书图文卡片", description="本轮目标")
-    benchmark_notes: List[str] = Field(default_factory=list, description="对标素材")
-    comment_notes: List[str] = Field(default_factory=list, description="评论或私信素材")
-    constraints: List[str] = Field(default_factory=list, description="限制条件")
-    brand_voice: str = Field(default="清醒、实操、少废话", description="账号语气")
-    card_count: int = Field(default=6, description="卡片页数")
-    research_brief: str = Field(default="", description="对标与需求研究摘要")
-    benchmark_accounts: List[BenchmarkAccount] = Field(default_factory=list)
-    demand_insights: List[DemandInsight] = Field(default_factory=list)
+class TopicNodeInput(GlobalState):
+    """选题库与高浏览选题节点输入。"""
 
 
-class ProcessNodeOutput(BaseModel):
-    """选题库与图文卡片节点输出。"""
+class TopicNodeOutput(BaseModel):
+    """选题库与高浏览选题节点输出。"""
 
     topic_bank: List[TopicRecord] = Field(default_factory=list)
-    card_package: CardPackage = Field(..., description="图文卡片成品包")
+    selected_topic: TopicRecord = Field(..., description="本轮选中的高潜选题")
+
+
+class SkillRulesNodeInput(GlobalState):
+    """Skill规则与参考图节点输入。"""
+
+
+class SkillRulesNodeOutput(BaseModel):
+    """Skill规则与参考图节点输出。"""
+
+    image_style_rules: ImageStyleRule = Field(..., description="3:4 卡通套图规则")
+    workflow_steps: List[WorkflowStep] = Field(default_factory=list)
+
+
+class PromptNodeInput(GlobalState):
+    """在线提示词编辑节点输入。"""
+
+
+class PromptNodeOutput(BaseModel):
+    """在线提示词编辑节点输出。"""
+
+    editable_prompts: List[EditablePrompt] = Field(default_factory=list)
+
+
+class OpenAITextNodeInput(GlobalState):
+    """OpenAI GPT5.5 文案节点输入。"""
+
+
+class OpenAITextNodeOutput(BaseModel):
+    """OpenAI GPT5.5 文案节点输出。"""
+
+    openai_text_package: TextDescriptionPackage = Field(..., description="OpenAI 文案包")
+
+
+class GrokImageNodeInput(GlobalState):
+    """Grok Expert 套图节点输入。"""
+
+
+class GrokImageNodeOutput(BaseModel):
+    """Grok Expert 套图节点输出。"""
+
+    grok_image_set: ImageSetPackage = Field(..., description="Grok 套图计划或结果")
+
+
+class FinalizeNodeInput(GlobalState):
+    """结果审核打包节点输入。"""
+
+
+class FinalizeNodeOutput(BaseModel):
+    """结果审核打包节点输出。"""
+
+    card_package: CardPackage = Field(..., description="最终图文卡片包")
     workflow_summary: str = Field(..., description="最终流程摘要")
     next_commands: List[str] = Field(default_factory=list)
 
 
-# 兼容 Coze 生成模板里的文件命名和节点名。
+# 兼容旧文件命名和 Coze 模板里的节点名。
 GreetingNodeInput = ResearchNodeInput
 GreetingNodeOutput = ResearchNodeOutput
+ProcessNodeInput = TopicNodeInput
+ProcessNodeOutput = TopicNodeOutput

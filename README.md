@@ -1,6 +1,6 @@
 # 小红书内容全栈工作流
 
-这个项目把 Coze 生成的最小 Python 工作流，改造成一个「找对标 -> 挖评论需求 -> 沉淀选题库 -> 生成图文卡片」的内容生产流程。目标是让使用者只输入几句指令，就能得到可审核、可复用、可继续生产的小红书图文方案。
+这个项目把 Coze 生成的最小 Python 工作流，改造成一个「找对标 -> 挖评论需求 -> 选择高浏览选题 -> 在线改提示词 -> OpenAI 生成文字描述 -> Grok 生成 3:4 卡通套图 -> 审核打包」的内容生产流程。目标是让使用者只输入几句指令，就能得到可审核、可复用、可继续生产的小红书图文方案。
 
 ## 资料依据
 
@@ -64,9 +64,22 @@
 - `goal`：本轮目标，例如 `生成一组小红书图文卡片`。
 - `benchmark_notes`：已知对标账号、爆款笔记、标题、正文、数据或风格摘录。
 - `comment_notes`：评论区原话、私信问题、用户抱怨、求资料表达。
+- `topic_research_notes`：浏览量、收藏、评论、高赞、热词等选题证据。
+- `user_selected_topic`：用户指定选题；填写后优先使用用户选题。
 - `constraints`：限制条件，例如 `不要承诺收益`、`强调免费工具`、`卡片 6 页以内`。
 - `brand_voice`：账号语气，例如 `清醒、实操、少废话`。
 - `card_count`：希望输出的卡片页数。
+- `image_count`：希望 Grok 生成的套图张数。
+- `image_aspect_ratio`：默认 `3:4`。
+- `image_style`：默认 `cartoon`。
+- `reference_image_notes`：用户提供参考图时，把角色、色彩、线条、镜头、情绪等观察写入这里。
+- `reference_image_urls`：参考图链接。
+- `prompt_overrides`：在线修改工作流提示词，支持 `topic_selection`、`openai_text_description`、`grok_expert_image_set`、`final_review`。
+- `openai_text_model`：默认 `gpt-5.5`，用于 OpenAI 文案节点。
+- `openai_reasoning_mode`：默认 `ultra_high`，用于 GPT5.5 超高推理模式。
+- `grok_image_model`：默认 `grok-expert`，用于 Grok Expert 生图节点。
+- `grok_image_mode`：默认 `Expert`。
+- `execute_model_calls`：默认 `false`，本地只生成请求计划；线上 Coze 可接入真实模型节点。
 
 没有对标或评论素材时，工作流会先生成一版研究框架和采样清单，不伪造真实平台数据。
 
@@ -83,24 +96,74 @@
 - 从 `comment_notes` 中提取用户需求、痛点、阻碍、购买/领取意图和评论原话。
 - 生成 `research_brief`，供下游节点引用。
 
-### 2. 选题库与图文卡片节点
+### 2. 选题库与高浏览选题节点
 
 文件：`cozepy/process_node.py`
 
 职责：
 
-- 将对标信息和评论需求沉淀成 `topic_bank`。
-- 为优先选题生成小红书图文卡片包：封面标题、每页卡片文案、视觉提示词、正文 caption、CTA、审核清单。
-- 生成下一步几句指令，让使用者继续迭代、扩写或交给设计工具出图。
+- 将对标信息、评论需求、浏览量/收藏/评论/热词证据沉淀成 `topic_bank`。
+- 自动选择预估浏览潜力最高的选题；如果用户填写 `user_selected_topic`，优先使用用户指定选题。
+
+### 3. Skill 规则与参考图节点
+
+文件：`cozepy/skill_rules_node.py`
+
+职责：
+
+- 参考本地/下载的视觉类 skill，把 3:4、卡通风格、套图一致性、参考图吸收规则写入 `image_style_rules`。
+- 输出完整 `workflow_steps`，让画布和结果都能直观看到完整 skill 流程。
+
+### 4. 在线提示词编辑节点
+
+文件：`cozepy/prompt_node.py`
+
+职责：
+
+- 输出 `editable_prompts`，包含默认提示词和应用 `prompt_overrides` 后的最终提示词。
+- 让用户在线修改 OpenAI 文案提示词、Grok 生图提示词、最终审核提示词。
+
+### 5. OpenAI GPT5.5 超高推理文案节点
+
+文件：`cozepy/openai_text_node.py`
+
+职责：
+
+- 使用 `openai_text_model` 和 `openai_reasoning_mode` 生成文字描述请求计划。
+- 输出封面标题、每页脚本、小红书正文、给 Grok 的视觉 brief。
+
+### 6. Grok Expert 3:4 卡通套图节点
+
+文件：`cozepy/grok_image_node.py`
+
+职责：
+
+- 使用 `grok_image_model` 和 `grok_image_mode` 为每页生成 3:4 竖版卡通图提示词。
+- 继承参考图规则、套图一致性规则和避免事项。
+
+### 7. 结果审核打包节点
+
+文件：`cozepy/finalize_node.py`
+
+职责：
+
+- 汇总选题、OpenAI 文案、Grok 套图提示、审核清单和下一步指令。
+- 确认 API Key 不进入任何输出字段。
 
 ## 输出
 
 结束节点输出：
 
 - `workflow_summary`：本轮流程摘要。
+- `workflow_steps`：完整节点链路。
 - `benchmark_accounts`：对标分析列表。
 - `demand_insights`：评论需求洞察列表。
 - `topic_bank`：可沉淀到知识库的选题库。
+- `selected_topic`：本轮选中的高潜选题。
+- `image_style_rules`：3:4 卡通套图规则。
+- `editable_prompts`：在线可修改提示词。
+- `openai_text_package`：OpenAI GPT5.5 文案包与请求计划。
+- `grok_image_set`：Grok Expert 套图提示与请求计划。
 - `card_package`：图文卡片成品规格。
 - `next_commands`：继续使用 skill/workflow 的短指令。
 
@@ -124,9 +187,21 @@ result = main_graph.invoke({
         "评论：有没有适合下班后做的项目",
         "评论：能不能给一个从0开始的步骤"
     ],
+    "topic_research_notes": [
+        "对标标题 1.8 万浏览，评论集中问零基础和下班后怎么做",
+        "搜索热词：AI副业、普通人副业、零基础AI"
+    ],
+    "user_selected_topic": "",
     "constraints": ["不要承诺收益", "强调先验证需求", "卡片不超过6页"],
     "brand_voice": "清醒、实操、少废话",
-    "card_count": 6
+    "card_count": 6,
+    "image_count": 6,
+    "image_aspect_ratio": "3:4",
+    "image_style": "cartoon",
+    "reference_image_notes": ["圆润线条", "明亮但不刺眼", "主角表情夸张但不幼稚"],
+    "prompt_overrides": {
+        "grok_expert_image_set": "生成 3:4 竖版卡通套图，统一角色、统一色板、每页只表达一个核心动作。"
+    }
 })
 ```
 
