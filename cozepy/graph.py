@@ -3,7 +3,8 @@
 
 GraphInput -> 对标与需求挖掘 -> 选题库与高浏览选题 -> Skill规则与参考图
 -> OpenAI/Grok Skill 子流程 -> 在线提示词编辑 -> OpenAI GPT5.5 文案
--> Grok Expert 套图 -> 结果审核打包 -> GraphOutput
+                                     └-> Grok Expert 套图
+OpenAI/Grok 两个生成分支在结果审核打包节点汇合。
 """
 from __future__ import annotations
 
@@ -69,11 +70,10 @@ class LocalContentWorkflow:
         prompt_output = prompt_node(state)
         state = GlobalState(**{**_dump(state), **_dump(prompt_output)})
 
-        text_output = openai_text_node(state)
-        state = GlobalState(**{**_dump(state), **_dump(text_output)})
-
-        image_output = grok_image_node(state)
-        state = GlobalState(**{**_dump(state), **_dump(image_output)})
+        branch_state = state
+        text_output = openai_text_node(branch_state)
+        image_output = grok_image_node(branch_state)
+        state = GlobalState(**{**_dump(state), **_dump(text_output), **_dump(image_output)})
 
         final_output = finalize_node(state)
         state = GlobalState(**{**_dump(state), **_dump(final_output)})
@@ -87,6 +87,9 @@ class LocalContentWorkflow:
                 topic_bank=state.topic_bank,
                 selected_topic=state.selected_topic,
                 image_style_rules=state.image_style_rules,
+                workflow_diagram_nodes=state.workflow_diagram_nodes,
+                workflow_diagram_edges=state.workflow_diagram_edges,
+                operator_edit_panels=state.operator_edit_panels,
                 skill_subflows=state.skill_subflows,
                 editable_prompts=state.editable_prompts,
                 openai_text_package=state.openai_text_package,
@@ -119,7 +122,8 @@ if StateGraph is not None:
     builder.add_edge("skill_rules", "skill_subflows")
     builder.add_edge("skill_subflows", "prompt_editor")
     builder.add_edge("prompt_editor", "openai_text")
-    builder.add_edge("openai_text", "grok_image_set")
+    builder.add_edge("prompt_editor", "grok_image_set")
+    builder.add_edge("openai_text", "finalize")
     builder.add_edge("grok_image_set", "finalize")
     builder.add_edge("finalize", END)
 

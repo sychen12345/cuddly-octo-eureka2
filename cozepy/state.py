@@ -3,7 +3,8 @@
 
 这个版本按完整 Coze 画布拆分为多节点：
 开始 -> 对标与需求挖掘 -> 选题库与高浏览选题 -> Skill规则与参考图
--> 在线提示词编辑 -> OpenAI GPT5.5 文案 -> Grok Expert 套图 -> 结果审核打包 -> 结束。
+-> OpenAI/Grok Skill 子流程 -> 在线提示词编辑 -> OpenAI GPT5.5 文案 / Grok Expert 套图并行
+-> 结果审核打包 -> 结束。
 """
 from typing import Any, Dict, List
 
@@ -102,6 +103,53 @@ class SkillSubflow(BaseModel):
     editable: bool = Field(default=True, description="是否允许运营在线修改")
     steps: List[SkillSubflowStep] = Field(default_factory=list, description="可视化步骤")
     status: str = Field(default="ready", description="ready/dry_run/completed/failed")
+
+
+class WorkflowDiagramNode(BaseModel):
+    """给低代码画布渲染用的流程图节点。"""
+
+    node_key: str = Field(..., description="流程图节点键名")
+    title: str = Field(..., description="节点显示名")
+    node_type: str = Field(default="workflow", description="workflow/subflow/step/start/end")
+    lane: str = Field(default="", description="泳道或分组")
+    subflow_key: str = Field(default="", description="所属子流程")
+    row: int = Field(default=0, description="建议渲染行")
+    column: int = Field(default=0, description="建议渲染列")
+    editable: bool = Field(default=False, description="是否建议暴露编辑入口")
+    input_keys: List[str] = Field(default_factory=list, description="输入字段")
+    output_keys: List[str] = Field(default_factory=list, description="输出字段")
+
+
+class WorkflowDiagramEdge(BaseModel):
+    """给低代码画布渲染用的流程图连线。"""
+
+    from_node: str = Field(..., description="起点节点")
+    to_node: str = Field(..., description="终点节点")
+    label: str = Field(default="", description="连线说明")
+    edge_type: str = Field(default="sequence", description="sequence/parallel/join/subflow")
+
+
+class OperatorControl(BaseModel):
+    """运营可用的表单控件，不要求填写 JSON。"""
+
+    control_key: str = Field(..., description="控件键名")
+    label: str = Field(..., description="控件显示名")
+    control_type: str = Field(default="text", description="text/textarea/select/toggle/number")
+    input_key: str = Field(..., description="对应 GraphInput 字段")
+    current_value: Any = Field(default="", description="当前值")
+    placeholder: str = Field(default="", description="占位提示")
+    options: List[str] = Field(default_factory=list, description="可选项")
+    target_path: str = Field(default="", description="映射到子流程中的位置")
+    help_text: str = Field(default="", description="给运营看的说明")
+
+
+class OperatorEditPanel(BaseModel):
+    """运营可视化编辑面板。"""
+
+    panel_key: str = Field(..., description="面板键名")
+    title: str = Field(..., description="面板标题")
+    description: str = Field(default="", description="面板说明")
+    controls: List[OperatorControl] = Field(default_factory=list, description="可编辑控件")
 
 
 class ModelRequest(BaseModel):
@@ -213,6 +261,11 @@ class GlobalState(BaseModel):
     image_style: str = Field(default="cartoon", description="图片风格")
     reference_image_notes: List[str] = Field(default_factory=list, description="参考图规则")
     reference_image_urls: List[str] = Field(default_factory=list, description="参考图链接")
+    openai_text_skill_prompt: str = Field(default="", description="运营表单：OpenAI 文案 skill 提示词")
+    grok_image_skill_prompt: str = Field(default="", description="运营表单：Grok 生图 skill 提示词")
+    grok_visual_rules_prompt: str = Field(default="", description="运营表单：Grok 视觉规则提示词")
+    openai_review_enabled: bool = Field(default=True, description="运营表单：是否启用 OpenAI 文案审核步骤")
+    grok_review_enabled: bool = Field(default=True, description="运营表单：是否启用 Grok 套图审核步骤")
     prompt_overrides: Dict[str, str] = Field(default_factory=dict, description="在线提示词覆盖")
     skill_flow_overrides: Dict[str, Any] = Field(default_factory=dict, description="在线修改 OpenAI/Grok 子流程")
     openai_text_model: str = Field(default="gpt-5.5", description="OpenAI 文案模型")
@@ -236,6 +289,9 @@ class GlobalState(BaseModel):
     )
     image_style_rules: ImageStyleRule = Field(default_factory=ImageStyleRule)
     workflow_steps: List[WorkflowStep] = Field(default_factory=list)
+    workflow_diagram_nodes: List[WorkflowDiagramNode] = Field(default_factory=list)
+    workflow_diagram_edges: List[WorkflowDiagramEdge] = Field(default_factory=list)
+    operator_edit_panels: List[OperatorEditPanel] = Field(default_factory=list)
     skill_subflows: List[SkillSubflow] = Field(default_factory=list)
     editable_prompts: List[EditablePrompt] = Field(default_factory=list)
     openai_text_package: TextDescriptionPackage = Field(default_factory=TextDescriptionPackage)
@@ -266,6 +322,11 @@ class GraphInput(BaseModel):
     image_style: str = Field(default="cartoon", description="图片风格")
     reference_image_notes: List[str] = Field(default_factory=list, description="参考图规则")
     reference_image_urls: List[str] = Field(default_factory=list, description="参考图链接")
+    openai_text_skill_prompt: str = Field(default="", description="运营表单：OpenAI 文案 skill 提示词")
+    grok_image_skill_prompt: str = Field(default="", description="运营表单：Grok 生图 skill 提示词")
+    grok_visual_rules_prompt: str = Field(default="", description="运营表单：Grok 视觉规则提示词")
+    openai_review_enabled: bool = Field(default=True, description="运营表单：是否启用 OpenAI 文案审核步骤")
+    grok_review_enabled: bool = Field(default=True, description="运营表单：是否启用 Grok 套图审核步骤")
     prompt_overrides: Dict[str, str] = Field(default_factory=dict, description="在线提示词覆盖")
     skill_flow_overrides: Dict[str, Any] = Field(default_factory=dict, description="在线修改 OpenAI/Grok 子流程")
     openai_text_model: str = Field(default="gpt-5.5", description="OpenAI 文案模型")
@@ -285,6 +346,9 @@ class GraphOutput(BaseModel):
     topic_bank: List[TopicRecord] = Field(default_factory=list)
     selected_topic: TopicRecord = Field(..., description="本轮选中的高潜选题")
     image_style_rules: ImageStyleRule = Field(..., description="3:4 卡通套图规则")
+    workflow_diagram_nodes: List[WorkflowDiagramNode] = Field(default_factory=list, description="可视化流程图节点")
+    workflow_diagram_edges: List[WorkflowDiagramEdge] = Field(default_factory=list, description="可视化流程图连线")
+    operator_edit_panels: List[OperatorEditPanel] = Field(default_factory=list, description="运营可视化编辑面板")
     skill_subflows: List[SkillSubflow] = Field(default_factory=list, description="OpenAI/Grok 可编辑子流程")
     editable_prompts: List[EditablePrompt] = Field(default_factory=list)
     openai_text_package: TextDescriptionPackage = Field(..., description="OpenAI GPT5.5 文案包")
@@ -336,6 +400,9 @@ class SkillSubflowNodeOutput(BaseModel):
     """OpenAI/Grok 子流程构建节点输出。"""
 
     skill_subflows: List[SkillSubflow] = Field(default_factory=list)
+    workflow_diagram_nodes: List[WorkflowDiagramNode] = Field(default_factory=list)
+    workflow_diagram_edges: List[WorkflowDiagramEdge] = Field(default_factory=list)
+    operator_edit_panels: List[OperatorEditPanel] = Field(default_factory=list)
 
 
 class PromptNodeInput(GlobalState):

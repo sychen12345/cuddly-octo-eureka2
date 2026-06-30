@@ -96,6 +96,8 @@ def finalize_node(
     image_set = _dump(_get(state, "grok_image_set", {}))
     prompts = _get(state, "editable_prompts", []) or []
     subflows = _get(state, "skill_subflows", []) or []
+    diagram_nodes = _get(state, "workflow_diagram_nodes", []) or []
+    edit_panels = _get(state, "operator_edit_panels", []) or []
     workflow_steps = _get(state, "workflow_steps", []) or []
     cards = _cards(state)
 
@@ -123,20 +125,25 @@ def finalize_node(
             "每页只表达一个核心信息，文字不压画面",
             "提示词可通过 prompt_overrides 在线修改",
             "OpenAI/Grok 两个 skill 子流程可通过 skill_flow_overrides 在线修改",
+            "运营可通过 operator_edit_panels 的普通表单字段修改子流程，不需要写 JSON",
+            "OpenAI 文案和 Grok 套图是并行分支，在结果审核打包节点汇合",
         ],
     )
 
     workflow_summary = (
         f"已完成完整工作流：{len(workflow_steps)} 个流程节点、"
+        f"{len(diagram_nodes)} 个可视化流程图节点、"
         f"{len(subflows)} 个可视化可编辑 skill 子流程、"
+        f"{len(edit_panels)} 个运营表单编辑面板、"
         f"{len(prompts)} 个可在线修改提示词、"
         f"{len(_get(state, 'topic_bank', []) or [])} 个选题、"
-        f"{len(cards)} 页 OpenAI 文案卡片、"
+        f"{len(cards)} 页 OpenAI 文案卡片、并行生成 "
         f"{len(image_set.get('images', []) or [])} 张 Grok Expert 3:4 卡通套图计划。"
     )
     next_commands = [
-        "在 skill_flow_overrides.openai_text_skill.steps.generate_xhs_text.prompt 中改写 OpenAI 文案 skill 后重跑。",
-        "在 skill_flow_overrides.grok_image_skill.steps.compose_page_prompts.prompt 中加入参考图风格要求后重跑。",
+        "在 openai_text_skill_prompt 中用普通话描述你想要的文案风格后重跑。",
+        "在 grok_image_skill_prompt 中描述套图画面要求后重跑。",
+        "在 image_aspect_ratio、image_style、grok_visual_rules_prompt 中修改图片比例、风格和参考图规则。",
         "补充 topic_research_notes 的浏览量、收藏、评论数据，重新选择高浏览选题。",
         "填写 user_selected_topic，强制使用你指定的小红书选题。",
     ]

@@ -25,7 +25,7 @@ If the user gives only a short instruction, proceed with explicit assumptions an
 
 When the user wants current market evidence, search the web or the target platform if tools and permissions allow it. If live data is unavailable, clearly mark the result as a research framework or hypothesis and provide a sampling checklist.
 
-For the bundled Coze-style Python workflow, require runtime `grok_api_key` and `openai_api_key` inputs before any node runs. Never echo, log, or include those API keys in final outputs. Treat `prompt_overrides` as the online prompt editor for individual prompts and `skill_flow_overrides` as the editor for the OpenAI/Grok skill subflows. Keep `execute_model_calls=false` for dry-run request plans; set it to `true` only when the workflow should directly call OpenAI Responses API and xAI/Grok image generation with the runtime keys.
+For the bundled Coze-style Python workflow, require runtime `grok_api_key` and `openai_api_key` inputs before any node runs. Never echo, log, or include those API keys in final outputs. Prefer operator-friendly fields such as `openai_text_skill_prompt`, `grok_image_skill_prompt`, `grok_visual_rules_prompt`, `image_aspect_ratio`, `image_style`, `openai_review_enabled`, and `grok_review_enabled` for visual workflow editing. Treat `prompt_overrides` and `skill_flow_overrides` as advanced editors. Keep `execute_model_calls=false` for dry-run request plans; set it to `true` only when the workflow should directly call OpenAI Responses API and xAI/Grok image generation with the runtime keys.
 
 ## Workflow
 
@@ -51,6 +51,8 @@ For the bundled Coze-style Python workflow, require runtime `grok_api_key` and `
 
 5. Build editable OpenAI/Grok skill subflows.
    - Expose `openai_text_skill` and `grok_image_skill` as visual subflows with editable steps.
+   - Output `workflow_diagram_nodes` and `workflow_diagram_edges` so the low-code UI can render the main workflow, child flowcharts, parallel branches, and join points.
+   - Output `operator_edit_panels` so operators can use text areas, selects, and toggles instead of JSON.
    - Apply `skill_flow_overrides` to step prompts, models, modes, titles, and enabled flags.
    - Use enabled subflow steps as the actual model input for OpenAI text generation and Grok image generation.
 
@@ -62,12 +64,14 @@ For the bundled Coze-style Python workflow, require runtime `grok_api_key` and `
    - Use GPT5.5 ultra-high reasoning mode when available/configured.
    - In the Python workflow, `ultra_high` maps to OpenAI API `reasoning.effort=xhigh`.
    - Call the configured `openai_text_skill` subflow, not a loose standalone prompt.
+   - Run this branch in parallel with Grok image generation after prompt editing.
    - Produce title options, page-by-page card script, caption, CTA, and a visual brief for the image model.
 
 8. Generate a Grok Expert image set.
    - Produce 3:4 vertical cartoon prompts for each card page.
    - Use the configured xAI image model, defaulting to `grok-imagine-image-quality`, while keeping `grok_image_mode=Expert` as the workflow mode.
    - Call the configured `grok_image_skill` subflow, not a loose standalone prompt.
+   - Run this branch in parallel with OpenAI text generation; if OpenAI text is not yet available, use selected-topic fallback scripts.
    - Use reference image notes to define character, color, line, lens, mood, and composition rules.
    - Keep the image set visually consistent across pages.
 
@@ -88,13 +92,15 @@ Return sections in this order unless the user asks for a different format:
 4. `选题库`
 5. `选中的高浏览选题`
 6. `完整工作流节点`
-7. `可视化 skill 子流程`
-8. `可在线编辑提示词`
-9. `OpenAI GPT5.5 文案包`
-10. `Grok Expert 3:4 卡通套图`
-11. `图文卡片包`
-12. `下一步指令`
-13. `审核清单`
+7. `可视化流程图节点和连线`
+8. `运营表单编辑面板`
+9. `可视化 skill 子流程`
+10. `可在线编辑提示词`
+11. `OpenAI GPT5.5 文案包`
+12. `Grok Expert 3:4 卡通套图`
+13. `图文卡片包`
+14. `下一步指令`
+15. `审核清单`
 
 ## Quality Gates
 
@@ -108,6 +114,8 @@ Return sections in this order unless the user asks for a different format:
 - Use cartoon style by default; absorb reference-image rules without copying protected artwork.
 - Keep prompt blocks editable and preserve both default and final prompt values.
 - Keep OpenAI/Grok skill subflows visible and editable; do not collapse them into a single opaque prompt.
+- Keep OpenAI and Grok generation as parallel branches that join in final packaging.
+- Prefer operator edit panels over JSON for routine workflow changes.
 - For card copy, prioritize clarity and usefulness over dramatic language.
 
 ## Good Trigger Prompts

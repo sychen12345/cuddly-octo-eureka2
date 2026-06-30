@@ -54,6 +54,10 @@ class XhsSkillSubflowTests(unittest.TestCase):
         )
         self.assertEqual(len(result["workflow_steps"]), 8)
         self.assertIn("skill_subflows", [step["node_key"] for step in result["workflow_steps"]])
+        step_status = {step["node_key"]: step["status"] for step in result["workflow_steps"]}
+        self.assertEqual(step_status["openai_text"], "parallel_branch")
+        self.assertEqual(step_status["grok_image_set"], "parallel_branch")
+        self.assertEqual(step_status["finalize"], "join")
 
         openai_steps = {step["step_key"]: step for step in result["skill_subflows"][0]["steps"]}
         grok_steps = {step["step_key"]: step for step in result["skill_subflows"][1]["steps"]}
@@ -65,6 +69,65 @@ class XhsSkillSubflowTests(unittest.TestCase):
         self.assertIn("openai_text_skill.generate_xhs_text", prompt_keys)
         self.assertIn("grok_image_skill.compose_page_prompts", prompt_keys)
         self.assertEqual(len(result["editable_prompts"]), 10)
+
+    def test_workflow_diagram_has_parallel_branches_and_operator_panels(self):
+        result = main_graph.invoke(base_input())
+
+        edges = {
+            (edge["from_node"], edge["to_node"]): edge["edge_type"]
+            for edge in result["workflow_diagram_edges"]
+        }
+        self.assertEqual(edges[("prompt_editor", "openai_text")], "parallel")
+        self.assertEqual(edges[("prompt_editor", "grok_image_set")], "parallel")
+        self.assertEqual(edges[("openai_text", "finalize")], "join")
+        self.assertEqual(edges[("grok_image_set", "finalize")], "join")
+
+        nodes = {node["node_key"]: node for node in result["workflow_diagram_nodes"]}
+        self.assertEqual(nodes["openai_text"]["column"], 0)
+        self.assertEqual(nodes["grok_image_set"]["column"], 2)
+        self.assertTrue(nodes["openai_text_skill.generate_xhs_text"]["editable"])
+        self.assertTrue(nodes["grok_image_skill.compose_page_prompts"]["editable"])
+
+        panels = {panel["panel_key"]: panel for panel in result["operator_edit_panels"]}
+        self.assertIn("openai_text_skill", panels)
+        self.assertIn("grok_image_skill", panels)
+        control_keys = {
+            control["control_key"]
+            for panel in result["operator_edit_panels"]
+            for control in panel["controls"]
+        }
+        self.assertIn("openai_text_skill_prompt", control_keys)
+        self.assertIn("grok_image_skill_prompt", control_keys)
+        self.assertIn("image_aspect_ratio", control_keys)
+
+    def test_plain_operator_fields_modify_skills_without_json(self):
+        input_data = base_input()
+        input_data.pop("skill_flow_overrides")
+        input_data.update(
+            {
+                "image_aspect_ratio": "4:5",
+                "openai_text_skill_prompt": "普通表单改OpenAI：更像运营复盘，不要技术黑话。",
+                "grok_visual_rules_prompt": "普通表单改视觉规则：粉蓝色板、圆角角色、留出标题区。",
+                "grok_image_skill_prompt": "普通表单改Grok：4:5卡通套图，每页只画一个动作。",
+                "openai_review_enabled": False,
+                "grok_review_enabled": False,
+            }
+        )
+
+        result = main_graph.invoke(input_data)
+        openai_steps = {step["step_key"]: step for step in result["skill_subflows"][0]["steps"]}
+        grok_steps = {step["step_key"]: step for step in result["skill_subflows"][1]["steps"]}
+        self.assertIn("普通表单改OpenAI", openai_steps["generate_xhs_text"]["final_prompt"])
+        self.assertFalse(openai_steps["review_text_for_image"]["enabled"])
+        self.assertIn("普通表单改视觉规则", grok_steps["load_visual_rules"]["final_prompt"])
+        self.assertIn("普通表单改Grok", grok_steps["compose_page_prompts"]["final_prompt"])
+        self.assertFalse(grok_steps["review_set_consistency"]["enabled"])
+
+        text_request = result["openai_text_package"]["request"]
+        image_request = result["grok_image_set"]["images"][0]["request"]
+        self.assertIn("普通表单改OpenAI", text_request["payload"]["input"])
+        self.assertIn("普通表单改Grok", image_request["payload"]["prompt"])
+        self.assertEqual(image_request["payload"]["aspect_ratio"], "4:5")
 
     def test_dry_run_requests_call_the_corresponding_skill_subflows(self):
         result = main_graph.invoke(base_input())
@@ -127,6 +190,7 @@ class XhsSkillSubflowTests(unittest.TestCase):
             self.assertEqual(payload["aspect_ratio"], "3:4")
             self.assertEqual(payload["response_format"], "url")
             self.assertIn("运营改写Grok子流程", payload["prompt"])
+            self.assertNotIn("AI副业先别乱学工具", payload["prompt"])
             self.assertNotIn("Authorization", json.dumps(payload, ensure_ascii=False))
             return {"data": [{"url": f"https://example.com/xhs-{calls['grok']}.png"}]}
 

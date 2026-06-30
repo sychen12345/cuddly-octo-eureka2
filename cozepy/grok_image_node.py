@@ -87,6 +87,28 @@ def _subflow_prompt(subflow: Dict[str, Any], fallback: str) -> str:
     return "\n\n".join(blocks).strip() or fallback
 
 
+def _selected_topic(state: Any) -> Dict[str, Any]:
+    return _dump(_get(state, "selected_topic", {}))
+
+
+def _fallback_scripts(state: Any, count: int) -> list[str]:
+    topic = _selected_topic(state)
+    title = str(topic.get("title") or _get(state, "niche", "小红书选题")).strip()
+    audience = str(_get(state, "audience", "小红书新手用户")).strip()
+    pages = [
+        f"封面：{title}",
+        f"痛点：{audience}面对这个选题时最常见的卡点",
+        "证据：评论区需求、对标标题和高浏览信号并列呈现",
+        "方法：把需求拆成一个可执行的小步骤",
+        "行动：今天先采样评论、补证据、再决定是否发布",
+        "收口：把选题、证据、差异化沉淀到选题库",
+        "复盘：发布后看收藏、评论追问和私信关键词",
+        "延展：下一篇继续围绕同一需求做细分选题",
+        "总结：用同一视觉符号收束整套卡片",
+    ]
+    return pages[: max(3, min(count or 6, 9))]
+
+
 def _extract_image_url(response: Dict[str, Any]) -> str:
     data = response.get("data")
     if not isinstance(data, list) or not data:
@@ -129,7 +151,7 @@ def grok_image_node(
     avoid = "；".join(image_rules.get("avoid", []) or [])
     reference_notes = "；".join(image_rules.get("reference_image_notes", []) or [])
     image_count = max(3, min(int(_get(state, "image_count", 6) or 6), 9))
-    scripts = list(text_package.get("card_script", []) or [])[:image_count]
+    scripts = list(text_package.get("card_script", []) or [])[:image_count] or _fallback_scripts(state, image_count)
     execute_model_calls = bool(_get(state, "execute_model_calls", False))
     api_key = str(_get(state, "grok_api_key", "")).strip()
 

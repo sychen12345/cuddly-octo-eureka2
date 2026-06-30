@@ -98,6 +98,66 @@ Each `SkillSubflowStep` includes:
 }
 ```
 
+For operators who do not edit JSON, prefer these plain GraphInput fields:
+
+- `openai_text_skill_prompt`: maps to `openai_text_skill.steps.generate_xhs_text.prompt`.
+- `grok_image_skill_prompt`: maps to `grok_image_skill.steps.compose_page_prompts.prompt`.
+- `grok_visual_rules_prompt`: maps to `grok_image_skill.steps.load_visual_rules.prompt`.
+- `image_aspect_ratio`: updates the image rule and Grok request aspect ratio.
+- `image_style`: updates the image rule and Grok prompt style.
+- `openai_review_enabled`: toggles `openai_text_skill.steps.review_text_for_image.enabled`.
+- `grok_review_enabled`: toggles `grok_image_skill.steps.review_set_consistency.enabled`.
+
+## Workflow Diagram
+
+Use `workflow_diagram_nodes` and `workflow_diagram_edges` to render the workflow as a visual graph.
+
+Each node includes:
+
+- `node_key`: stable graph node key.
+- `title`: visible node title.
+- `node_type`: `workflow`, `subflow`, `step`, `start`, or `end`.
+- `lane`: visual group or swimlane.
+- `subflow_key`: parent subflow for child steps.
+- `row` and `column`: suggested layout position.
+- `editable`: whether the UI should expose an edit affordance.
+- `input_keys` and `output_keys`: fields shown on the node.
+
+Each edge includes:
+
+- `from_node`: source node key.
+- `to_node`: target node key.
+- `label`: optional edge label.
+- `edge_type`: `sequence`, `parallel`, `join`, or `subflow`.
+
+The main graph should include these parallel and join edges:
+
+- `prompt_editor -> openai_text` with `edge_type=parallel`.
+- `prompt_editor -> grok_image_set` with `edge_type=parallel`.
+- `openai_text -> finalize` with `edge_type=join`.
+- `grok_image_set -> finalize` with `edge_type=join`.
+
+## Operator Edit Panel
+
+Use `operator_edit_panels` for non-technical operators. Each panel has:
+
+- `panel_key`: target skill, such as `openai_text_skill` or `grok_image_skill`.
+- `title`: visible panel title.
+- `description`: short operator-facing guidance.
+- `controls`: form controls.
+
+Each control has:
+
+- `control_key`: stable control key.
+- `label`: visible label.
+- `control_type`: `text`, `textarea`, `select`, `toggle`, or `number`.
+- `input_key`: plain GraphInput field to bind.
+- `current_value`: current form value.
+- `placeholder`: writing hint.
+- `options`: choices for selects.
+- `target_path`: where the field maps inside a subflow.
+- `help_text`: plain-language operator help.
+
 ## Image Style Rule
 
 - `aspect_ratio`: default `3:4`.

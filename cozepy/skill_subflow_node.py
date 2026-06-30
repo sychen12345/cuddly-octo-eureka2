@@ -24,9 +24,27 @@ except ImportError:  # pragma: no cover
     Context = Any  # type: ignore
 
 try:
-    from graphs.state import SkillSubflow, SkillSubflowNodeInput, SkillSubflowNodeOutput, SkillSubflowStep
+    from graphs.state import (
+        OperatorControl,
+        OperatorEditPanel,
+        SkillSubflow,
+        SkillSubflowNodeInput,
+        SkillSubflowNodeOutput,
+        SkillSubflowStep,
+        WorkflowDiagramEdge,
+        WorkflowDiagramNode,
+    )
 except ImportError:
-    from .state import SkillSubflow, SkillSubflowNodeInput, SkillSubflowNodeOutput, SkillSubflowStep
+    from .state import (
+        OperatorControl,
+        OperatorEditPanel,
+        SkillSubflow,
+        SkillSubflowNodeInput,
+        SkillSubflowNodeOutput,
+        SkillSubflowStep,
+        WorkflowDiagramEdge,
+        WorkflowDiagramNode,
+    )
 
 
 def _get(state: Any, key: str, default: Any = None) -> Any:
@@ -77,6 +95,55 @@ def _step_overrides(skill_override: Dict[str, Any]) -> Dict[str, Dict[str, Any]]
     return {}
 
 
+def _deep_merge(base: Dict[str, Any], patch: Dict[str, Any]) -> Dict[str, Any]:
+    merged = dict(base)
+    for key, value in patch.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def _operator_field_overrides(state: Any) -> Dict[str, Any]:
+    """Map plain visual form fields to subflow overrides."""
+    openai_prompt = str(_get(state, "openai_text_skill_prompt", "")).strip()
+    grok_prompt = str(_get(state, "grok_image_skill_prompt", "")).strip()
+    visual_prompt = str(_get(state, "grok_visual_rules_prompt", "")).strip()
+
+    overrides: Dict[str, Any] = {
+        "openai_text_skill": {
+            "steps": {
+                "review_text_for_image": {
+                    "enabled": bool(_get(state, "openai_review_enabled", True)),
+                }
+            }
+        },
+        "grok_image_skill": {
+            "steps": {
+                "review_set_consistency": {
+                    "enabled": bool(_get(state, "grok_review_enabled", True)),
+                }
+            }
+        },
+    }
+    if openai_prompt:
+        overrides["openai_text_skill"]["steps"]["generate_xhs_text"] = {"prompt": openai_prompt}
+    if grok_prompt:
+        overrides["grok_image_skill"]["steps"]["compose_page_prompts"] = {"prompt": grok_prompt}
+    if visual_prompt:
+        overrides["grok_image_skill"]["steps"]["load_visual_rules"] = {"prompt": visual_prompt}
+    return overrides
+
+
+def _combined_skill_overrides(state: Any) -> Dict[str, Any]:
+    visual_overrides = _operator_field_overrides(state)
+    advanced_overrides = _get(state, "skill_flow_overrides", {}) or {}
+    if not isinstance(advanced_overrides, dict):
+        advanced_overrides = {}
+    return _deep_merge(visual_overrides, advanced_overrides)
+
+
 def _apply_overrides(
     subflow: SkillSubflow,
     skill_overrides: Dict[str, Any],
@@ -121,6 +188,240 @@ def _apply_overrides(
 
     subflow.steps = patched_steps
     return subflow
+
+
+def _diagram_nodes(subflows: List[SkillSubflow]) -> List[WorkflowDiagramNode]:
+    nodes = [
+        WorkflowDiagramNode(node_key="start", title="开始", node_type="start", lane="入口", row=0, column=1),
+        WorkflowDiagramNode(
+            node_key="benchmark_and_demand",
+            title="对标与需求挖掘",
+            lane="研究",
+            row=1,
+            column=1,
+            output_keys=["research_brief", "benchmark_accounts", "demand_insights"],
+        ),
+        WorkflowDiagramNode(
+            node_key="topic_selection",
+            title="选题库与高浏览选题",
+            lane="研究",
+            row=2,
+            column=1,
+            output_keys=["topic_bank", "selected_topic"],
+        ),
+        WorkflowDiagramNode(
+            node_key="skill_rules",
+            title="Skill规则与参考图",
+            lane="规则",
+            row=3,
+            column=1,
+            editable=True,
+            input_keys=["image_aspect_ratio", "image_style", "reference_image_notes"],
+            output_keys=["image_style_rules"],
+        ),
+        WorkflowDiagramNode(
+            node_key="skill_subflows",
+            title="OpenAI/Grok Skill 子流程",
+            lane="可视化编辑",
+            row=4,
+            column=1,
+            editable=True,
+            output_keys=["skill_subflows", "operator_edit_panels"],
+        ),
+        WorkflowDiagramNode(
+            node_key="prompt_editor",
+            title="在线提示词编辑",
+            lane="可视化编辑",
+            row=5,
+            column=1,
+            editable=True,
+            input_keys=["openai_text_skill_prompt", "grok_image_skill_prompt", "grok_visual_rules_prompt"],
+            output_keys=["editable_prompts"],
+        ),
+        WorkflowDiagramNode(
+            node_key="openai_text",
+            title="OpenAI GPT5.5 文案",
+            lane="并行生成",
+            row=6,
+            column=0,
+            editable=True,
+            subflow_key="openai_text_skill",
+            output_keys=["openai_text_package"],
+        ),
+        WorkflowDiagramNode(
+            node_key="grok_image_set",
+            title="Grok Expert 套图",
+            lane="并行生成",
+            row=6,
+            column=2,
+            editable=True,
+            subflow_key="grok_image_skill",
+            output_keys=["grok_image_set"],
+        ),
+        WorkflowDiagramNode(
+            node_key="finalize",
+            title="结果审核打包",
+            lane="汇合",
+            row=7,
+            column=1,
+            output_keys=["card_package", "workflow_summary", "next_commands"],
+        ),
+        WorkflowDiagramNode(node_key="end", title="结束", node_type="end", lane="出口", row=8, column=1),
+    ]
+    for subflow in subflows:
+        subflow_data = _dump(subflow)
+        for index, step in enumerate(subflow_data.get("steps", []) or [], start=1):
+            step_data = _dump(step)
+            nodes.append(
+                WorkflowDiagramNode(
+                    node_key=f"{subflow_data.get('skill_key')}.{step_data.get('step_key')}",
+                    title=str(step_data.get("title", "")),
+                    node_type="step",
+                    lane=str(subflow_data.get("title", "")),
+                    subflow_key=str(subflow_data.get("skill_key", "")),
+                    row=index,
+                    column=0 if subflow_data.get("skill_key") == "openai_text_skill" else 2,
+                    editable=bool(step_data.get("editable", True)),
+                    input_keys=list(step_data.get("input_keys", []) or []),
+                    output_keys=list(step_data.get("output_keys", []) or []),
+                )
+            )
+    return nodes
+
+
+def _diagram_edges(subflows: List[SkillSubflow]) -> List[WorkflowDiagramEdge]:
+    edges = [
+        WorkflowDiagramEdge(from_node="start", to_node="benchmark_and_demand"),
+        WorkflowDiagramEdge(from_node="benchmark_and_demand", to_node="topic_selection"),
+        WorkflowDiagramEdge(from_node="topic_selection", to_node="skill_rules"),
+        WorkflowDiagramEdge(from_node="skill_rules", to_node="skill_subflows"),
+        WorkflowDiagramEdge(from_node="skill_subflows", to_node="prompt_editor"),
+        WorkflowDiagramEdge(
+            from_node="prompt_editor",
+            to_node="openai_text",
+            label="并行分支：文案",
+            edge_type="parallel",
+        ),
+        WorkflowDiagramEdge(
+            from_node="prompt_editor",
+            to_node="grok_image_set",
+            label="并行分支：套图",
+            edge_type="parallel",
+        ),
+        WorkflowDiagramEdge(from_node="openai_text", to_node="finalize", label="汇合", edge_type="join"),
+        WorkflowDiagramEdge(from_node="grok_image_set", to_node="finalize", label="汇合", edge_type="join"),
+        WorkflowDiagramEdge(from_node="finalize", to_node="end"),
+    ]
+    for subflow in subflows:
+        subflow_data = _dump(subflow)
+        skill_key = str(subflow_data.get("skill_key", ""))
+        steps = [_dump(step).get("step_key") for step in subflow_data.get("steps", []) or []]
+        for left, right in zip(steps, steps[1:]):
+            edges.append(
+                WorkflowDiagramEdge(
+                    from_node=f"{skill_key}.{left}",
+                    to_node=f"{skill_key}.{right}",
+                    edge_type="subflow",
+                )
+            )
+    return edges
+
+
+def _operator_panels(state: Any) -> List[OperatorEditPanel]:
+    return [
+        OperatorEditPanel(
+            panel_key="openai_text_skill",
+            title="OpenAI 文案 Skill",
+            description="运营只需要改这些表单项，不需要写 JSON 或代码。",
+            controls=[
+                OperatorControl(
+                    control_key="openai_text_skill_prompt",
+                    label="文案生成要求",
+                    control_type="textarea",
+                    input_key="openai_text_skill_prompt",
+                    current_value=str(_get(state, "openai_text_skill_prompt", "")),
+                    placeholder="例如：用更适合新手的语气，生成封面标题、6页脚本、正文和视觉 brief。",
+                    target_path="openai_text_skill.steps.generate_xhs_text.prompt",
+                    help_text="改这里就等于修改 OpenAI 文案子流程的核心生成节点。",
+                ),
+                OperatorControl(
+                    control_key="openai_reasoning_mode",
+                    label="推理强度",
+                    control_type="select",
+                    input_key="openai_reasoning_mode",
+                    current_value=str(_get(state, "openai_reasoning_mode", "ultra_high")),
+                    options=["ultra_high", "high", "medium", "low"],
+                    target_path="openai_text_skill.mode",
+                    help_text="默认 ultra_high，会映射到 OpenAI reasoning.effort=xhigh。",
+                ),
+                OperatorControl(
+                    control_key="openai_review_enabled",
+                    label="启用文案转图片审核",
+                    control_type="toggle",
+                    input_key="openai_review_enabled",
+                    current_value=bool(_get(state, "openai_review_enabled", True)),
+                    target_path="openai_text_skill.steps.review_text_for_image.enabled",
+                    help_text="关闭后，该审核步骤不会进入 OpenAI 模型输入。",
+                ),
+            ],
+        ),
+        OperatorEditPanel(
+            panel_key="grok_image_skill",
+            title="Grok 套图 Skill",
+            description="运营用表单改图片比例、风格、参考图规则和生图要求。",
+            controls=[
+                OperatorControl(
+                    control_key="image_aspect_ratio",
+                    label="图片比例",
+                    control_type="select",
+                    input_key="image_aspect_ratio",
+                    current_value=str(_get(state, "image_aspect_ratio", "3:4")),
+                    options=["3:4", "1:1", "4:5", "9:16"],
+                    target_path="image_style_rules.aspect_ratio",
+                    help_text="小红书图文默认用 3:4。",
+                ),
+                OperatorControl(
+                    control_key="image_style",
+                    label="图片风格",
+                    control_type="select",
+                    input_key="image_style",
+                    current_value=str(_get(state, "image_style", "cartoon")),
+                    options=["cartoon", "flat illustration", "3d cartoon", "hand-drawn"],
+                    target_path="image_style_rules.style",
+                    help_text="默认 cartoon，可以按账号视觉改。",
+                ),
+                OperatorControl(
+                    control_key="grok_visual_rules_prompt",
+                    label="参考图和视觉规则",
+                    control_type="textarea",
+                    input_key="grok_visual_rules_prompt",
+                    current_value=str(_get(state, "grok_visual_rules_prompt", "")),
+                    placeholder="例如：圆润线条、明亮色板、统一主角、画面留出标题安全区。",
+                    target_path="grok_image_skill.steps.load_visual_rules.prompt",
+                    help_text="改这里会影响 Grok 子流程读取视觉规则的节点。",
+                ),
+                OperatorControl(
+                    control_key="grok_image_skill_prompt",
+                    label="每页生图要求",
+                    control_type="textarea",
+                    input_key="grok_image_skill_prompt",
+                    current_value=str(_get(state, "grok_image_skill_prompt", "")),
+                    placeholder="例如：每页一个动作，统一角色，像一套完整小红书卡片。",
+                    target_path="grok_image_skill.steps.compose_page_prompts.prompt",
+                    help_text="改这里就等于修改 Grok 生图子流程的核心生成节点。",
+                ),
+                OperatorControl(
+                    control_key="grok_review_enabled",
+                    label="启用套图一致性审核",
+                    control_type="toggle",
+                    input_key="grok_review_enabled",
+                    current_value=bool(_get(state, "grok_review_enabled", True)),
+                    target_path="grok_image_skill.steps.review_set_consistency.enabled",
+                    help_text="关闭后，该审核步骤不会进入 Grok 图片 prompt。",
+                ),
+            ],
+        ),
+    ]
 
 
 def _openai_subflow(state: Any) -> SkillSubflow:
@@ -279,9 +580,7 @@ def skill_subflow_node(
     desc: 构建可视化、可在线编辑的 OpenAI 文案 skill 和 Grok 生图 skill
     integrations:
     """
-    skill_overrides = _get(state, "skill_flow_overrides", {}) or {}
-    if not isinstance(skill_overrides, dict):
-        skill_overrides = {}
+    skill_overrides = _combined_skill_overrides(state)
     prompt_overrides = _get(state, "prompt_overrides", {}) or {}
     if not isinstance(prompt_overrides, dict):
         prompt_overrides = {}
@@ -290,4 +589,9 @@ def skill_subflow_node(
         _apply_overrides(_openai_subflow(state), skill_overrides, prompt_overrides),
         _apply_overrides(_grok_subflow(state), skill_overrides, prompt_overrides),
     ]
-    return SkillSubflowNodeOutput(skill_subflows=subflows)
+    return SkillSubflowNodeOutput(
+        skill_subflows=subflows,
+        workflow_diagram_nodes=_diagram_nodes(subflows),
+        workflow_diagram_edges=_diagram_edges(subflows),
+        operator_edit_panels=_operator_panels(state),
+    )

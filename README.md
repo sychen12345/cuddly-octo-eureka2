@@ -1,6 +1,6 @@
 # 小红书内容全栈工作流
 
-这个项目把 Coze 生成的最小 Python 工作流，改造成一个「找对标 -> 挖评论需求 -> 选择高浏览选题 -> 生成可编辑 OpenAI/Grok 子流程 -> 在线改提示词 -> OpenAI 生成文字描述 -> Grok 生成 3:4 卡通套图 -> 审核打包」的内容生产流程。目标是让使用者只输入几句指令，就能得到可审核、可复用、可继续生产的小红书图文方案。
+这个项目把 Coze 生成的最小 Python 工作流，改造成一个「找对标 -> 挖评论需求 -> 选择高浏览选题 -> 生成可编辑 OpenAI/Grok 子流程 -> 在线改提示词 -> OpenAI 文案和 Grok 套图并行生成 -> 审核打包」的内容生产流程。目标是让使用者只输入几句指令，就能得到可审核、可复用、可继续生产的小红书图文方案。
 
 ## 资料依据
 
@@ -74,8 +74,13 @@
 - `image_style`：默认 `cartoon`。
 - `reference_image_notes`：用户提供参考图时，把角色、色彩、线条、镜头、情绪等观察写入这里。
 - `reference_image_urls`：参考图链接。
+- `openai_text_skill_prompt`：运营表单输入，用普通话修改 OpenAI 文案 skill 的核心生成要求。
+- `grok_image_skill_prompt`：运营表单输入，用普通话修改 Grok 生图 skill 的核心生成要求。
+- `grok_visual_rules_prompt`：运营表单输入，用普通话修改 Grok 读取参考图和视觉规则的步骤。
+- `openai_review_enabled`：运营表单开关，是否启用 OpenAI 文案转图片审核步骤。
+- `grok_review_enabled`：运营表单开关，是否启用 Grok 套图一致性审核步骤。
 - `prompt_overrides`：在线修改工作流提示词，支持 `topic_selection`、`openai_text_description`、`grok_expert_image_set`、`final_review`，也支持 `openai_text_skill.generate_xhs_text` 这类子流程步骤 prompt key。
-- `skill_flow_overrides`：在线修改 OpenAI/Grok 两个 skill 子流程，支持改模型、模式、步骤标题、步骤提示词和启用状态。
+- `skill_flow_overrides`：高级入口；运营优先使用上面的普通字段，懂 JSON 的管理员才需要用它批量改模型、模式、步骤标题、步骤提示词和启用状态。
 - `openai_text_model`：默认 `gpt-5.5`，用于 OpenAI 文案节点。
 - `openai_reasoning_mode`：默认 `ultra_high`，用于 GPT5.5 超高推理模式。
 - `grok_image_model`：默认 `grok-imagine-image-quality`，用于 Grok Expert/xAI 生图节点。
@@ -123,7 +128,9 @@
 
 - 把 OpenAI 文案生成和 Grok 套图生成拆成两个可视化子流程：`openai_text_skill`、`grok_image_skill`。
 - 每个子流程包含可编辑步骤，例如整理上下文、生成文案、审核图片 brief、读取视觉规则、生成每页图片提示词、审核套图一致性。
-- 应用 `skill_flow_overrides`，让运营在工作流运行时改步骤提示词、模型、模式、标题和启用状态。
+- 输出 `workflow_diagram_nodes` 和 `workflow_diagram_edges`，让低代码画布能渲染主流程、并行分支和子流程步骤。
+- 输出 `operator_edit_panels`，让运营用普通表单修改 skill，不需要写 JSON 或代码。
+- 应用普通表单字段和高级 `skill_flow_overrides`，让运行时改步骤提示词、模型、模式、标题和启用状态。
 
 ### 5. 在线提示词编辑节点
 
@@ -141,6 +148,7 @@
 职责：
 
 - 调用 `openai_text_skill` 子流程，把启用的子步骤组合成 OpenAI 输入。
+- 与 Grok 套图节点并行运行，二者在结果审核打包节点汇合。
 - 使用 `openai_text_model` 和 `openai_reasoning_mode` 生成文字描述；默认 `ultra_high` 会映射为 OpenAI API 的 `reasoning.effort=xhigh`。
 - `execute_model_calls=false` 时只输出可审核请求计划；`true` 时真实请求 `https://api.openai.com/v1/responses`。
 - 输出封面标题、每页脚本、小红书正文、给 Grok 的视觉 brief。
@@ -152,6 +160,7 @@
 职责：
 
 - 调用 `grok_image_skill` 子流程，把启用的子步骤组合成每页图片 prompt。
+- 与 OpenAI 文案节点并行运行；没有 OpenAI 文案输出时，会基于选题和卡片页数生成独立套图脚本。
 - 使用 `grok_image_model` 和 `grok_image_mode` 为每页生成 3:4 竖版卡通图提示词。
 - `execute_model_calls=false` 时只输出图片请求计划；`true` 时真实请求 `https://api.x.ai/v1/images/generations` 并回填 `image_url`。
 - 继承参考图规则、套图一致性规则和避免事项。
@@ -176,6 +185,9 @@
 - `topic_bank`：可沉淀到知识库的选题库。
 - `selected_topic`：本轮选中的高潜选题。
 - `image_style_rules`：3:4 卡通套图规则。
+- `workflow_diagram_nodes`：可视化流程图节点，包含主流程节点和 OpenAI/Grok 子流程步骤。
+- `workflow_diagram_edges`：可视化流程图连线，包含 `parallel` 并行边和 `join` 汇合边。
+- `operator_edit_panels`：运营表单编辑面板，包含文本框、下拉框和开关。
 - `skill_subflows`：OpenAI/Grok 两个可视化可编辑 skill 子流程。
 - `editable_prompts`：在线可修改提示词。
 - `openai_text_package`：OpenAI GPT5.5 文案包、请求计划或真实调用状态。
@@ -216,22 +228,9 @@ result = main_graph.invoke({
     "image_style": "cartoon",
     "execute_model_calls": False,
     "reference_image_notes": ["圆润线条", "明亮但不刺眼", "主角表情夸张但不幼稚"],
-    "skill_flow_overrides": {
-        "openai_text_skill": {
-            "steps": {
-                "generate_xhs_text": {
-                    "prompt": "用更适合运营复盘的语气生成标题、卡片脚本、正文和视觉 brief。"
-                }
-            }
-        },
-        "grok_image_skill": {
-            "steps": {
-                "compose_page_prompts": {
-                    "prompt": "生成 3:4 竖版卡通套图，统一角色、统一色板、每页只表达一个核心动作。"
-                }
-            }
-        }
-    },
+    "openai_text_skill_prompt": "用更适合运营复盘的语气生成标题、卡片脚本、正文和视觉 brief。",
+    "grok_visual_rules_prompt": "圆润线条、明亮色板、统一主角、画面留出标题安全区。",
+    "grok_image_skill_prompt": "生成 3:4 竖版卡通套图，统一角色、统一色板、每页只表达一个核心动作。",
     "prompt_overrides": {
         "final_review": "重点检查 API Key 不泄露、选题证据充分、图片提示词确实来自可编辑子流程。"
     }
@@ -247,7 +246,9 @@ python3 -m unittest tests.test_xhs_skill_subflows
 测试覆盖：
 
 - `skill_subflows` 输出两个可视化可编辑子流程：`openai_text_skill` 和 `grok_image_skill`。
-- `skill_flow_overrides` 能修改步骤 prompt、启用状态，并进入 OpenAI/Grok 请求 payload。
+- `workflow_diagram_edges` 证明 OpenAI 和 Grok 是并行分支，并在 `finalize` 汇合。
+- `operator_edit_panels` 暴露运营可用的普通表单控件；`openai_text_skill_prompt`、`grok_image_skill_prompt` 等普通字段能修改 skill。
+- `skill_flow_overrides` 作为高级入口仍能修改步骤 prompt、启用状态，并进入 OpenAI/Grok 请求 payload。
 - mock live-call 会调用 OpenAI 1 次、Grok 6 次，并回填图片 URL；API Key 不进入输出。
 
 ## 审核原则

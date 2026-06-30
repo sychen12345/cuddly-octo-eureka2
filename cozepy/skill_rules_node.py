@@ -143,6 +143,7 @@ def skill_rules_node(
             model_or_tool=str(_get(state, "openai_text_model", "gpt-5.5")),
             prompt_key="openai_text_skill",
             output_keys=["openai_text_package"],
+            status="parallel_branch",
         ),
         WorkflowStep(
             node_key="grok_image_set",
@@ -150,6 +151,7 @@ def skill_rules_node(
             model_or_tool=str(_get(state, "grok_image_model", "grok-imagine-image-quality")),
             prompt_key="grok_image_skill",
             output_keys=["grok_image_set"],
+            status="parallel_branch",
         ),
         WorkflowStep(
             node_key="finalize",
@@ -157,6 +159,7 @@ def skill_rules_node(
             model_or_tool="workflow packager",
             prompt_key="final_review",
             output_keys=["card_package", "workflow_summary", "next_commands"],
+            status="join",
         ),
     ]
 
