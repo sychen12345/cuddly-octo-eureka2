@@ -1,0 +1,28 @@
+{
+  "image_style": {
+    "aspect_ratio": "3:4",
+    "style": "cartoon",
+    "must_have": ["小红书图文卡片；短句；层级清楚"],
+    "avoid": [
+      "不要生成真人照片或写真",
+      "不要使用过于复杂的配色",
+      "不要在小图上放长段落"
+    ],
+    "consistency_rules": [
+      "全部卡片使用同一配色方案",
+      "标题字体、大小保持一致",
+      "每页最多一个核心信息",
+      "封面与内页风格统一"
+    ]
+  },
+  "workflow_steps": [
+    {"node_key": "greeting", "title": "对标与需求挖掘", "model_or_tool": "", "prompt_key": "", "output_keys": ["research_brief", "benchmark_accounts", "demand_insights"]},
+    {"node_key": "process", "title": "选题库与高浏览选题", "model_or_tool": "", "prompt_key": "", "output_keys": ["topic_bank", "selected_topic"]},
+    {"node_key": "skill_rules", "title": "Skill规则与参考图", "model_or_tool": "", "prompt_key": "", "output_keys": ["image_style_rules", "workflow_steps"]},
+    {"node_key": "skill_subflow", "title": "OpenAI/Grok Skill 子流程", "model_or_tool": "openai+grok", "prompt_key": "", "output_keys": ["skill_subflows"]},
+    {"node_key": "prompt", "title": "在线提示词编辑", "model_or_tool": "", "prompt_key": "", "output_keys": ["editable_prompts"]},
+    {"node_key": "openai_text", "title": "OpenAI GPT5.5 文案", "model_or_tool": "gpt-5.5", "prompt_key": "openai_text_prompt", "output_keys": ["openai_text_package"]},
+    {"node_key": "grok_image", "title": "Grok Expert 套图", "model_or_tool": "grok-imagine-image-quality", "prompt_key": "grok_image_prompt", "output_keys": ["grok_image_set"]},
+    {"node_key": "finalize", "title": "结果审核打包", "model_or_tool": "", "prompt_key": "", "output_keys": ["card_package", "workflow_summary", "next_commands"]}
+  ]
+}

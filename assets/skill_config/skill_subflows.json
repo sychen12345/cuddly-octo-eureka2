@@ -1,0 +1,76 @@
+{
+  "subflows": [
+    {
+      "skill_key": "openai_text_skill",
+      "title": "OpenAI GPT5.5 文案子流程",
+      "provider": "openai",
+      "model": "gpt-5.5",
+      "mode": "ultra_high",
+      "endpoint": "https://api.openai.com/v1/chat/completions",
+      "description": "生成小红书图文卡片文案：标题、正文、每页脚本、视觉说明",
+      "editable": true,
+      "steps": [
+        {
+          "step_key": "openai_analyze",
+          "title": "分析选题与需求",
+          "node_type": "model",
+          "model_or_tool": "gpt-5.5",
+          "prompt_key": "openai_text_prompt",
+          "input_keys": ["selected_topic", "audience", "niche"],
+          "output_keys": ["title_options", "card_script", "image_brief"],
+          "editable": true,
+          "enabled": true,
+          "notes": "可修改提示词来调整文案风格"
+        },
+        {
+          "step_key": "openai_generate",
+          "title": "生成正文与卡片脚本",
+          "node_type": "prompt",
+          "model_or_tool": "gpt-5.5",
+          "prompt_key": "openai_generate_prompt",
+          "input_keys": ["openai_text_prompt_output"],
+          "output_keys": ["post_description", "card_script"],
+          "editable": true,
+          "enabled": true,
+          "notes": "可调整每页卡片的内容密度"
+        }
+      ]
+    },
+    {
+      "skill_key": "grok_image_skill",
+      "title": "Grok Expert 套图子流程",
+      "provider": "grok",
+      "model": "grok-imagine-image-quality",
+      "mode": "Expert",
+      "endpoint": "https://api.x.ai/v1/images/generations",
+      "description": "生成 3:4 cartoon 风格的小红书图文套图",
+      "editable": true,
+      "steps": [
+        {
+          "step_key": "grok_plan",
+          "title": "规划套图视觉方向",
+          "node_type": "rule",
+          "model_or_tool": "grok-imagine-image-quality",
+          "prompt_key": "grok_plan_prompt",
+          "input_keys": ["image_style_rules", "openai_text_package"],
+          "output_keys": ["grok_image_plan"],
+          "editable": true,
+          "enabled": true,
+          "notes": "可修改视觉方向"
+        },
+        {
+          "step_key": "grok_generate",
+          "title": "生成套图",
+          "node_type": "model",
+          "model_or_tool": "grok-imagine-image-quality",
+          "prompt_key": "grok_image_prompt",
+          "input_keys": ["grok_image_plan"],
+          "output_keys": ["grok_image_set"],
+          "editable": true,
+          "enabled": true,
+          "notes": "可修改生图提示词"
+        }
+      ]
+    }
+  ]
+}

@@ -1,130 +1,132 @@
-"""节点 8/8 — 结果审核打包 (finalize)"""
+"""
+结果审核打包节点
+整合所有节点输出，生成最终结果；支持将运营修改回写到配置文件
+"""
+import os
+import json
+import copy
+from typing import List, Dict, Optional, Any, Union
 
-from typing import Any, Dict, List, Optional
-
+from pydantic import BaseModel
 from langchain_core.runnables import RunnableConfig
 from langgraph.runtime import Runtime
 from coze_coding_utils.runtime_ctx.context import Context
 
-from graphs.state import (
-    CardPage, CardPackage, EditablePrompt, GrokImageSet, ImageStyleRules,
-    OpenAITextPackage, OperatorControl, OperatorEditPanel, SkillSubflowDef,
-    TopicRecord, WorkflowDiagramNode, WorkflowDiagramEdge, WorkflowStepInfo,
-    FinalizeNodeInput, FinalizeNodeOutput,
-)
+from graphs.state import FinalizeNodeInput, FinalizeNodeOutput
+
+
+def _to_dict(obj: Any) -> Any:
+    """将 BaseModel 转为 dict，已经是 dict 则原样返回"""
+    if isinstance(obj, BaseModel):
+        return obj.model_dump()
+    if isinstance(obj, dict):
+        return obj
+    return obj
+
+
+def _sync_back_config(cfg_filename: str, data: Any) -> None:
+    """将运营修改后的配置回写到配置文件"""
+    cfg_path = os.path.join(os.getenv("COZE_WORKSPACE_PATH", ""), "assets", "skill_config", cfg_filename)
+    with open(cfg_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def _get_attr(data: Any, key: str, default: Any = None) -> Any:
+    """统一获取属性：支持 BaseModel 属性访问和 dict 的 .get()"""
+    if isinstance(data, BaseModel):
+        return getattr(data, key, default)
+    if isinstance(data, dict):
+        return data.get(key, default)
+    return default
 
 
 def _build_card_package(
-    selected_topic: Optional[TopicRecord],
-    openai_pkg: Optional[OpenAITextPackage],
-    grok_set: Optional[GrokImageSet],
-) -> CardPackage:
-    topic_title = selected_topic.title if selected_topic else ""
-    cover_options = openai_pkg.title_options if openai_pkg and openai_pkg.title_options else [topic_title]
-    caption = openai_pkg.post_description if openai_pkg else ""
-    cards: List[CardPage] = []
+    selected_topic: Any,
+    openai_text_package: Any,
+    grok_image_set: Any,
+    card_count: int
+) -> Dict[str, Any]:
+    """构建最终卡片包"""
+    topic_title = ""
+    if isinstance(selected_topic, BaseModel):
+        topic_title = getattr(selected_topic, "title", "")
+    elif isinstance(selected_topic, dict):
+        topic_title = selected_topic.get("title", "")
 
-    # 合并文案和图片
-    scripts = openai_pkg.card_script if openai_pkg else []
-    images = grok_set.images if grok_set else []
+    # 封面选项
+    title_options: List[str] = _get_attr(openai_text_package, "title_options", [topic_title])
+    if not isinstance(title_options, list):
+        title_options = [topic_title]
+    cover_options = title_options[:4] if title_options else [topic_title]
 
-    max_pages = max(len(scripts), len(images), 1)
-    for i in range(max_pages):
+    # 卡片脚本
+    card_script: List[str] = _get_attr(openai_text_package, "card_script", [])
+    if not isinstance(card_script, list):
+        card_script = []
+
+    # 图片
+    grok_images_raw = _get_attr(grok_image_set, "images", [])
+    grok_images: List[Dict[str, Any]] = [_to_dict(img) for img in (grok_images_raw if isinstance(grok_images_raw, list) else [])]
+
+    # 组装每页卡片
+    cards: List[Dict[str, Any]] = []
+    for i in range(card_count):
         page = i + 1
-        headline = scripts[i] if i < len(scripts) else f"第{page}页：待补充"
+        headline = card_script[i] if i < len(card_script) else f"第{page}页：待补充"
         body = headline
-        visual = images[i].prompt if i < len(images) else ""
-        cards.append(CardPage(page=page, headline=headline, body=body, visual_prompt=visual))
 
-    return CardPackage(
-        topic_title=topic_title,
-        cover_options=cover_options,
-        cards=cards,
-        caption=caption,
-        hashtags=[f"#{topic_title}", "#小红书运营", "#内容选题"],
-        cta="想继续做的话，把你的对标标题和评论原话贴进来，我会继续扩成下一组卡片。",
-        review_checklist=[
+        # 匹配对应的 grok 图片
+        visual_prompt = ""
+        for img in grok_images:
+            if isinstance(img, dict) and img.get("page") == page:
+                visual_prompt = img.get("prompt", "")
+                break
+
+        cards.append({
+            "page": page,
+            "headline": headline,
+            "body": body,
+            "visual_prompt": visual_prompt
+        })
+
+    # 正文描述
+    post_description = _get_attr(openai_text_package, "post_description", "")
+    caption = post_description if post_description else f"关于「{topic_title}」的小红书图文卡片正文。"
+
+    # 标签
+    hashtags = [f"#{topic_title}", "#小红书运营", "#内容选题"]
+
+    return {
+        "topic_title": topic_title,
+        "cover_options": cover_options,
+        "cards": cards,
+        "caption": caption,
+        "hashtags": hashtags,
+        "cta": "想继续做的话，把你的对标标题和评论原话贴进来，我会继续扩成下一组卡片。",
+        "review_checklist": [
             "是否所有真实数据都有来源",
             "是否没有承诺阅读量、涨粉或收益",
             "是否只学习对标结构，没有复制原文",
             "是否每页卡片只有一个核心信息",
-            "是否保留了下一轮评论采样入口",
-        ],
-    )
-
-
-def _build_operator_control(
-    skill_subflows: List[SkillSubflowDef],
-    editable_prompts: List[EditablePrompt],
-) -> OperatorControl:
-    panels: List[OperatorEditPanel] = []
-
-    for subflow in skill_subflows:
-        panels.append(OperatorEditPanel(
-            key=subflow.skill_key,
-            title=subflow.title,
-            panel_type="subflow",
-            editable=subflow.editable,
-            content=subflow.model_dump(),
-        ))
-
-    for prompt in editable_prompts:
-        panels.append(OperatorEditPanel(
-            key=prompt.key,
-            title=prompt.title,
-            panel_type="prompt",
-            editable=prompt.editable,
-            content=prompt.model_dump(),
-        ))
-
-    return OperatorControl(
-        edit_panels=panels,
-        actions=["edit_prompt", "toggle_step", "rerun"],
-        status="ready",
-    )
-
-
-def _build_diagram(workflow_steps: List[WorkflowStepInfo]) -> tuple:
-    nodes: List[WorkflowDiagramNode] = []
-    edges: List[WorkflowDiagramEdge] = []
-    positions = [
-        ("greeting", "对标与需求挖掘", "task", 0, 0),
-        ("process", "选题库", "task", 1, 0),
-        ("skill_rules", "Skill规则", "task", 2, 0),
-        ("skill_subflow", "子流程", "task", 3, 0),
-        ("prompt", "提示词编辑", "task", 4, 0),
-        ("openai_text", "OpenAI 文案", "task", 5, -1),
-        ("grok_image", "Grok 套图", "task", 5, 1),
-        ("finalize", "结果打包", "task", 6, 0),
-    ]
-    for pid, title, ptype, x, y in positions:
-        nodes.append(WorkflowDiagramNode(id=pid, title=title, type=ptype, x=x, y=y))
-
-    chain = ["greeting", "process", "skill_rules", "skill_subflow", "prompt"]
-    for i in range(len(chain) - 1):
-        edges.append(WorkflowDiagramEdge(source=chain[i], target=chain[i + 1]))
-
-    # prompt 分两路并行
-    edges.append(WorkflowDiagramEdge(source="prompt", target="openai_text"))
-    edges.append(WorkflowDiagramEdge(source="prompt", target="grok_image"))
-    # 并行汇聚到 finalize
-    edges.append(WorkflowDiagramEdge(source="openai_text", target="finalize"))
-    edges.append(WorkflowDiagramEdge(source="grok_image", target="finalize"))
-
-    return nodes, edges
+            "是否保留了下一轮评论采样入口"
+        ]
+    }
 
 
 def _build_workflow_summary(
     niche: str,
-    selected_topic: Optional[TopicRecord],
-    openai_pkg: Optional[OpenAITextPackage],
-    grok_set: Optional[GrokImageSet],
-    topic_count: int,
-    card_count: int,
+    benchmark_accounts: Any,
+    demand_insights: Any,
+    topic_bank: Any,
+    card_package: Dict[str, Any],
+    openai_text_package: Any,
+    grok_image_set: Any
 ) -> str:
-    topic_title = selected_topic.title if selected_topic else niche
-    text_status = openai_pkg.status if openai_pkg else "dry_run"
-    image_status = grok_set.status if grok_set else "dry_run"
+    """构建工作流摘要"""
+    text_status = _get_attr(openai_text_package, "status", "dry_run")
+    image_status = _get_attr(grok_image_set, "status", "dry_run")
+    topic_count = len(topic_bank) if isinstance(topic_bank, list) else 0
+    card_count = len(card_package.get("cards", []))
     return (
         f"已完成「{niche}」内容工作流："
         f"沉淀 {topic_count} 个选题，"
@@ -133,40 +135,143 @@ def _build_workflow_summary(
     )
 
 
+def _build_workflow_steps(workflow_steps_cfg: List[Any]) -> List[Dict[str, Any]]:
+    """构建工作流步骤概览"""
+    result: List[Dict[str, Any]] = []
+    for step in workflow_steps_cfg:
+        step_dict = _to_dict(step) if isinstance(step, BaseModel) else step
+        if isinstance(step_dict, dict):
+            result.append({
+                "node_key": step_dict.get("node_key", ""),
+                "title": step_dict.get("title", ""),
+                "model_or_tool": step_dict.get("model_or_tool", ""),
+                "prompt_key": step_dict.get("prompt_key", ""),
+                "output_keys": step_dict.get("output_keys", []),
+                "status": "ready"
+            })
+    return result
+
+
+def _build_workflow_diagram() -> Dict[str, Any]:
+    """构建工作流图（含并行结构）"""
+    nodes = [
+        {"id": "greeting", "title": "对标与需求挖掘", "type": "task", "x": 0, "y": 0},
+        {"id": "process", "title": "选题库", "type": "task", "x": 1, "y": 0},
+        {"id": "skill_rules", "title": "Skill规则", "type": "task", "x": 2, "y": 0},
+        {"id": "skill_subflow", "title": "子流程", "type": "task", "x": 3, "y": 0},
+        {"id": "prompt", "title": "提示词编辑", "type": "task", "x": 4, "y": 0},
+        {"id": "openai_text", "title": "OpenAI 文案", "type": "task", "x": 5, "y": -1},
+        {"id": "grok_image", "title": "Grok 套图", "type": "task", "x": 5, "y": 1},
+        {"id": "finalize", "title": "结果打包", "type": "task", "x": 6, "y": 0}
+    ]
+    edges = [
+        {"source": "greeting", "target": "process", "label": ""},
+        {"source": "process", "target": "skill_rules", "label": ""},
+        {"source": "skill_rules", "target": "skill_subflow", "label": ""},
+        {"source": "skill_subflow", "target": "prompt", "label": ""},
+        {"source": "prompt", "target": "openai_text", "label": ""},
+        {"source": "prompt", "target": "grok_image", "label": ""},
+        {"source": "openai_text", "target": "finalize", "label": ""},
+        {"source": "grok_image", "target": "finalize", "label": ""}
+    ]
+    return {"nodes": nodes, "edges": edges}
+
+
+def _build_operator_control(
+    subflow_panels: List[Any],
+    prompt_panels: List[Any],
+    style_panels: List[Any]
+) -> Dict[str, Any]:
+    """构建完整的 operator_control"""
+    all_panels = []
+    for p in style_panels:
+        all_panels.append(_to_dict(p) if isinstance(p, BaseModel) else p)
+    for p in subflow_panels:
+        all_panels.append(_to_dict(p) if isinstance(p, BaseModel) else p)
+    for p in prompt_panels:
+        all_panels.append(_to_dict(p) if isinstance(p, BaseModel) else p)
+    return {
+        "edit_panels": all_panels,
+        "actions": ["edit_prompt", "toggle_step", "rerun", "reorder_step", "sync_config"],
+        "status": "ready"
+    }
+
+
 def finalize_node(
     state: FinalizeNodeInput,
     config: RunnableConfig,
-    runtime: Runtime[Context],
+    runtime: Runtime[Context]
 ) -> FinalizeNodeOutput:
     """
     title: 结果审核打包
-    desc: 合并 OpenAI 文案和 Grok 套图，生成最终卡片包、工作流摘要和运算器控制面板
+    desc: 整合所有节点输出，生成最终卡片包和工作流摘要；支持将运营修改回写到配置文件
     integrations:
     """
     ctx = runtime.context
 
-    card_package = _build_card_package(state.selected_topic, state.openai_text_package, state.grok_image_set)
-    operator_control = _build_operator_control(state.skill_subflows, state.editable_prompts)
-    diagram_nodes, diagram_edges = _build_diagram(state.workflow_steps)
-    workflow_summary = _build_workflow_summary(
-        state.niche, state.selected_topic,
-        state.openai_text_package, state.grok_image_set,
-        len(state.selected_topic.outline) if state.selected_topic and state.selected_topic.outline else 0,
-        len(card_package.cards),
+    # 1. 构建卡片包
+    card_package = _build_card_package(
+        state.selected_topic,
+        state.openai_text_package,
+        state.grok_image_set,
+        state.card_count
     )
 
+    # 2. 构建工作流摘要
+    workflow_summary = _build_workflow_summary(
+        state.niche,
+        state.benchmark_accounts,
+        state.demand_insights,
+        state.topic_bank,
+        card_package,
+        state.openai_text_package,
+        state.grok_image_set
+    )
+
+    # 3. 构建工作流步骤
+    workflow_steps = _build_workflow_steps(state.workflow_steps)
+
+    # 4. 构建工作流图
+    diagram = _build_workflow_diagram()
+
+    # 5. 构建下一步指令
+    topic_title = ""
+    if isinstance(state.selected_topic, BaseModel):
+        topic_title = getattr(state.selected_topic, "title", "")
+    elif isinstance(state.selected_topic, dict):
+        topic_title = state.selected_topic.get("title", "")
     next_commands = [
-        f"继续扩写「{card_package.topic_title}」，生成更口语化的卡片文案。",
+        f"继续扩写「{topic_title}」，生成更口语化的卡片文案。",
         f"把「{state.niche}」的评论需求整理成选题库 Markdown。",
         "补充真实评论和对标标题，重新排序选题优先级。",
-        "把当前卡片包改成更强封面标题和更短页面正文。",
+        "把当前卡片包改成更强封面标题和更短页面正文。"
     ]
+
+    # 6. 构建完整的 operator_control
+    operator_control = _build_operator_control(
+        state.operator_control_subflow_panels,
+        state.operator_control_prompt_panels,
+        state.operator_control_edit_panels
+    )
+
+    # 7. 如果运营有修改，回写配置文件
+    if state.sync_back_skill_rules and state.synced_skill_rules_cfg:
+        _sync_back_config("skill_rules.json", {
+            "image_style": _to_dict(state.synced_skill_rules_cfg),
+            "workflow_steps": [_to_dict(s) for s in state.workflow_steps]
+        })
+
+    if state.sync_back_skill_subflows and state.synced_skill_subflows_cfg:
+        _sync_back_config("skill_subflows.json", {
+            "subflows": [_to_dict(sf) for sf in state.synced_skill_subflows_cfg]
+        })
 
     return FinalizeNodeOutput(
         card_package=card_package,
         workflow_summary=workflow_summary,
+        workflow_steps=workflow_steps,
         next_commands=next_commands,
-        operator_control=operator_control,
-        workflow_diagram_nodes=diagram_nodes,
-        workflow_diagram_edges=diagram_edges,
+        workflow_diagram_nodes=diagram["nodes"],
+        workflow_diagram_edges=diagram["edges"],
+        operator_control=operator_control
     )

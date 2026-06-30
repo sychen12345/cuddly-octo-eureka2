@@ -204,6 +204,9 @@ class GlobalState(BaseModel):
     operator_control: Optional[OperatorControl] = Field(default=None, description="运算器控制")
     workflow_diagram_nodes: List[WorkflowDiagramNode] = Field(default_factory=list, description="工作流节点图")
     workflow_diagram_edges: List[WorkflowDiagramEdge] = Field(default_factory=list, description="工作流边图")
+    # 回写配置
+    synced_skill_rules_cfg: Dict[str, Any] = Field(default_factory=dict, description="待回写的 skill_rules 配置")
+    synced_skill_subflows_cfg: List[Dict[str, Any]] = Field(default_factory=list, description="待回写的 skill_subflows 配置")
 
 
 # ═══════════════════════════════════════════════════════════
@@ -242,6 +245,14 @@ class GraphOutput(BaseModel):
     operator_control: Optional[OperatorControl] = Field(default=None, description="运算器控制")
     workflow_diagram_nodes: List[WorkflowDiagramNode] = Field(default_factory=list, description="工作流节点图")
     workflow_diagram_edges: List[WorkflowDiagramEdge] = Field(default_factory=list, description="工作流边图")
+    config_sync_result: Dict[str, Any] = Field(default_factory=dict, description="配置回写结果")
+    operator_control_subflow_panels: List[Dict[str, Any]] = Field(default_factory=list, description="子流程编辑面板")
+    operator_control_prompt_panels: List[Dict[str, Any]] = Field(default_factory=list, description="提示词编辑面板")
+    operator_control_edit_panels: List[Dict[str, Any]] = Field(default_factory=list, description="通用编辑面板")
+    sync_back_skill_rules: Dict[str, Any] = Field(default_factory=dict, description="回写 skill_rules 触发标志")
+    sync_back_skill_subflows: List[Dict[str, Any]] = Field(default_factory=list, description="回写 skill_subflows 触发标志")
+    synced_skill_rules_cfg: Dict[str, Any] = Field(default_factory=dict, description="待回写的 skill_rules 配置数据")
+    synced_skill_subflows_cfg: List[Dict[str, Any]] = Field(default_factory=list, description="待回写的 skill_subflows 配置数据")
 
 
 # ═══════════════════════════════════════════════════════════
@@ -280,28 +291,38 @@ class ProcessNodeOutput(BaseModel):
     topic_bank: List[TopicRecord] = Field(..., description="选题库")
     selected_topic: Optional[TopicRecord] = Field(..., description="选中选题")
 
-# skill_rules_node: Skill规则与参考图
+# skill_rules_node: Skill规则与参考图（支持运营画布编辑 + 配置回写）
 class SkillRulesNodeInput(BaseModel):
     niche: str = Field(default="", description="赛道/领域")
     audience: str = Field(default="", description="目标人群")
     selected_topic: Optional[TopicRecord] = Field(default=None, description="选中选题")
     card_count: int = Field(default=6, description="卡片数量")
+    image_style_override: Optional[Dict[str, Any]] = Field(default=None, description="运营在画布上修改的图片风格覆盖")
+    workflow_steps_override: Optional[List[Dict[str, Any]]] = Field(default=None, description="运营在画布上拖拽排序后的步骤覆盖")
 
 class SkillRulesNodeOutput(BaseModel):
     image_style_rules: Optional[ImageStyleRules] = Field(..., description="图片风格规则")
     workflow_steps: List[WorkflowStepInfo] = Field(default_factory=list, description="工作流步骤")
+    operator_control_edit_panels: List[Dict[str, Any]] = Field(default_factory=list, description="运营可编辑面板（风格选择/步骤排序）")
+    synced_skill_rules_cfg: Dict[str, Any] = Field(default_factory=dict, description="待回写的 skill_rules 配置")
 
-# skill_subflow_node: OpenAI/Grok Skill 子流程
+# skill_subflow_node: OpenAI/Grok Skill 子流程（支持步骤排序 + 提示词编辑 + 配置回写）
 class SkillSubflowNodeInput(BaseModel):
     niche: str = Field(default="", description="赛道/领域")
     audience: str = Field(default="", description="目标人群")
+    brand_voice: str = Field(default="", description="品牌语气")
     selected_topic: Optional[TopicRecord] = Field(default=None, description="选中选题")
     image_style_rules: Optional[ImageStyleRules] = Field(default=None, description="图片风格规则")
+    skill_subflows_override: Optional[List[Dict[str, Any]]] = Field(default=None, description="运营在画布上修改的子流程覆盖")
 
 class SkillSubflowNodeOutput(BaseModel):
     skill_subflows: List[SkillSubflowDef] = Field(..., description="Skill 子流程列表")
+    editable_prompts: List[EditablePrompt] = Field(default_factory=list, description="可编辑提示词列表")
+    operator_control_subflow_panels: List[Dict[str, Any]] = Field(default_factory=list, description="子流程可编辑面板（步骤可拖拽排序）")
+    operator_control_prompt_panels: List[Dict[str, Any]] = Field(default_factory=list, description="提示词可编辑面板")
+    synced_skill_subflows_cfg: List[Dict[str, Any]] = Field(default_factory=list, description="待回写的 skill_subflows 配置")
 
-# prompt_node: 在线提示词编辑
+# prompt_node: 在线提示词编辑（现在由 skill_subflow_node 统一输出 editable_prompts）
 class PromptNodeInput(BaseModel):
     niche: str = Field(default="", description="赛道/领域")
     audience: str = Field(default="", description="目标人群")
@@ -309,6 +330,7 @@ class PromptNodeInput(BaseModel):
     selected_topic: Optional[TopicRecord] = Field(default=None, description="选中选题")
     image_style_rules: Optional[ImageStyleRules] = Field(default=None, description="图片风格规则")
     skill_subflows: List[SkillSubflowDef] = Field(default_factory=list, description="Skill 子流程列表")
+    editable_prompts: List[EditablePrompt] = Field(default_factory=list, description="从 skill_subflow_node 传入的可编辑提示词")
 
 class PromptNodeOutput(BaseModel):
     editable_prompts: List[EditablePrompt] = Field(..., description="可编辑提示词列表")
@@ -345,7 +367,11 @@ class GrokImageNodeOutput(BaseModel):
 class FinalizeNodeInput(BaseModel):
     niche: str = Field(default="", description="赛道/领域")
     audience: str = Field(default="", description="目标人群")
+    card_count: int = Field(default=6, description="卡片数量")
     selected_topic: Optional[TopicRecord] = Field(default=None, description="选中选题")
+    benchmark_accounts: List[BenchmarkAccount] = Field(default_factory=list, description="对标账号")
+    demand_insights: List[DemandInsight] = Field(default_factory=list, description="需求洞察")
+    topic_bank: List[TopicRecord] = Field(default_factory=list, description="选题库")
     image_style_rules: Optional[ImageStyleRules] = Field(default=None, description="图片风格规则")
     skill_subflows: List[SkillSubflowDef] = Field(default_factory=list, description="Skill 子流程列表")
     editable_prompts: List[EditablePrompt] = Field(default_factory=list, description="可编辑提示词")
@@ -353,6 +379,13 @@ class FinalizeNodeInput(BaseModel):
     grok_image_set: Optional[GrokImageSet] = Field(default=None, description="Grok 套图集")
     workflow_steps: List[WorkflowStepInfo] = Field(default_factory=list, description="工作流步骤")
     constraints: List[str] = Field(default_factory=list, description="约束")
+    operator_control_subflow_panels: List[Dict[str, Any]] = Field(default_factory=list, description="子流程编辑面板")
+    operator_control_prompt_panels: List[Dict[str, Any]] = Field(default_factory=list, description="提示词编辑面板")
+    operator_control_edit_panels: List[Dict[str, Any]] = Field(default_factory=list, description="通用编辑面板")
+    sync_back_skill_rules: Dict[str, Any] = Field(default_factory=dict, description="回写 skill_rules 触发标志")
+    sync_back_skill_subflows: List[Dict[str, Any]] = Field(default_factory=list, description="回写 skill_subflows 触发标志")
+    synced_skill_rules_cfg: Dict[str, Any] = Field(default_factory=dict, description="待回写的 skill_rules 配置数据")
+    synced_skill_subflows_cfg: List[Dict[str, Any]] = Field(default_factory=list, description="待回写的 skill_subflows 配置数据")
 
 class FinalizeNodeOutput(BaseModel):
     card_package: Optional[CardPackage] = Field(..., description="图文卡片包")
@@ -361,3 +394,4 @@ class FinalizeNodeOutput(BaseModel):
     operator_control: Optional[OperatorControl] = Field(default=None, description="运算器控制")
     workflow_diagram_nodes: List[WorkflowDiagramNode] = Field(default_factory=list, description="工作流节点图")
     workflow_diagram_edges: List[WorkflowDiagramEdge] = Field(default_factory=list, description="工作流边图")
+    config_sync_result: Dict[str, Any] = Field(default_factory=dict, description="配置回写结果")

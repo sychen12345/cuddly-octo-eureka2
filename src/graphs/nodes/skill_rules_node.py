@@ -1,62 +1,150 @@
-"""节点 3/8 — Skill规则与参考图 (skill_rules)"""
-
-from typing import List, Optional
+"""
+Skill规则与参考图节点
+从 config/skill_rules.json 读取规则，输出 operator_control 可编辑面板
+运营可在画布上修改：风格、尺寸、必选项、禁选项、一致性规则、工作流步骤
+修改后通过 override 参数传入，自动同步回配置文件
+"""
+import os
+import json
+import copy
+from typing import List, Dict, Optional, Any
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.runtime import Runtime
 from coze_coding_utils.runtime_ctx.context import Context
 
-from graphs.state import (
-    ImageStyleRules, TopicRecord, WorkflowStepInfo,
-    SkillRulesNodeInput, SkillRulesNodeOutput,
-)
+from graphs.state import SkillRulesNodeInput, SkillRulesNodeOutput
 
 
-def _build_image_style(niche: str, selected_topic: Optional[TopicRecord], card_count: int) -> ImageStyleRules:
-    return ImageStyleRules(
-        aspect_ratio="3:4",
-        style="cartoon",
-        reference_image_notes=[],
-        reference_image_urls=[],
-        must_have=["小红书图文卡片；短句；层级清楚"],
-        avoid=[
-            "不要生成真人照片或写真",
-            "不要使用过于复杂的配色",
-            "不要在小图上放长段落",
-        ],
-        consistency_rules=[
-            "全部卡片使用同一配色方案",
-            "标题字体、大小保持一致",
-            "每页最多一个核心信息",
-            "封面与内页风格统一",
-        ],
-    )
+def _load_skill_rules() -> Dict[str, Any]:
+    """从配置文件读取 skill 规则"""
+    cfg_path = os.path.join(os.getenv("COZE_WORKSPACE_PATH", ""), "assets", "skill_config", "skill_rules.json")
+    with open(cfg_path, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 
-def _build_workflow_steps() -> List[WorkflowStepInfo]:
-    return [
-        WorkflowStepInfo(node_key="greeting", title="对标与需求挖掘", model_or_tool="", prompt_key="", output_keys=["research_brief", "benchmark_accounts", "demand_insights"], status="ready"),
-        WorkflowStepInfo(node_key="process", title="选题库与高浏览选题", model_or_tool="", prompt_key="", output_keys=["topic_bank", "selected_topic"], status="ready"),
-        WorkflowStepInfo(node_key="skill_rules", title="Skill规则与参考图", model_or_tool="", prompt_key="", output_keys=["image_style_rules", "workflow_steps"], status="ready"),
-        WorkflowStepInfo(node_key="skill_subflow", title="OpenAI/Grok Skill 子流程", model_or_tool="openai+grok", prompt_key="", output_keys=["skill_subflows"], status="ready"),
-        WorkflowStepInfo(node_key="prompt", title="在线提示词编辑", model_or_tool="", prompt_key="", output_keys=["editable_prompts"], status="ready"),
-        WorkflowStepInfo(node_key="openai_text", title="OpenAI GPT5.5 文案", model_or_tool="gpt-5.5", prompt_key="openai_text_prompt", output_keys=["openai_text_package"], status="ready"),
-        WorkflowStepInfo(node_key="grok_image", title="Grok Expert 套图", model_or_tool="grok-imagine-image-quality", prompt_key="grok_image_prompt", output_keys=["grok_image_set"], status="ready"),
-        WorkflowStepInfo(node_key="finalize", title="结果审核打包", model_or_tool="", prompt_key="", output_keys=["card_package", "workflow_summary", "next_commands"], status="ready"),
-    ]
+def _build_operator_panels(
+    image_style: Dict[str, Any],
+    workflow_steps: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """构建 operator_control 的 edit_panels，让运营在画布上可编辑"""
+    panels: List[Dict[str, Any]] = []
+
+    # 面板1: 图片风格设置
+    style_panel = {
+        "key": "image_style",
+        "title": "图片风格设置",
+        "panel_type": "form",
+        "editable": True,
+        "fields": [
+            {
+                "key": "aspect_ratio",
+                "label": "画面比例",
+                "type": "select",
+                "options": ["3:4", "1:1", "4:5", "16:9"],
+                "value": image_style.get("aspect_ratio", "3:4")
+            },
+            {
+                "key": "style",
+                "label": "视觉风格",
+                "type": "select",
+                "options": ["cartoon", "flat", "minimal", "realistic", "handdrawn"],
+                "value": image_style.get("style", "cartoon")
+            },
+            {
+                "key": "must_have",
+                "label": "必选项",
+                "type": "tag_list",
+                "value": image_style.get("must_have", []),
+                "addable": True
+            },
+            {
+                "key": "avoid",
+                "label": "禁选项",
+                "type": "tag_list",
+                "value": image_style.get("avoid", []),
+                "addable": True
+            },
+            {
+                "key": "consistency_rules",
+                "label": "一致性规则",
+                "type": "tag_list",
+                "value": image_style.get("consistency_rules", []),
+                "addable": True
+            }
+        ]
+    }
+    panels.append(style_panel)
+
+    # 面板2: 工作流步骤（可拖拽排序）
+    steps_panel = {
+        "key": "workflow_steps",
+        "title": "工作流步骤（可拖拽排序）",
+        "panel_type": "sortable_list",
+        "editable": True,
+        "items": []
+    }
+    for step in workflow_steps:
+        step_item = {
+            "key": step.get("node_key", ""),
+            "title": step.get("title", ""),
+            "model_or_tool": step.get("model_or_tool", ""),
+            "enabled": True,
+            "draggable": True
+        }
+        steps_panel["items"].append(step_item)
+    panels.append(steps_panel)
+
+    return panels
 
 
 def skill_rules_node(
     state: SkillRulesNodeInput,
     config: RunnableConfig,
-    runtime: Runtime[Context],
+    runtime: Runtime[Context]
 ) -> SkillRulesNodeOutput:
     """
     title: Skill规则与参考图
-    desc: 根据选题和赛道生成图片风格规则与工作流步骤概览
+    desc: 从配置文件读取图片风格规则和工作流步骤，输出可编辑面板供运营在画布上修改
     integrations:
     """
     ctx = runtime.context
-    image_style_rules = _build_image_style(state.niche, state.selected_topic, state.card_count)
-    workflow_steps = _build_workflow_steps()
-    return SkillRulesNodeOutput(image_style_rules=image_style_rules, workflow_steps=workflow_steps)
+
+    # 1. 从配置文件读取规则
+    rules_cfg = _load_skill_rules()
+    image_style: Dict[str, Any] = rules_cfg.get("image_style", {})
+    workflow_steps: List[Dict[str, Any]] = rules_cfg.get("workflow_steps", [])
+
+    # 2. 如果有运行时 override，合并覆盖
+    if state.image_style_override:
+        image_style.update(state.image_style_override)
+    if state.workflow_steps_override:
+        workflow_steps = state.workflow_steps_override
+
+    # 3. 根据领域微调规则
+    niche = state.niche
+    must_have = list(image_style.get("must_have", []))
+    if niche and f"领域：{niche}" not in must_have:
+        must_have.append(f"领域：{niche}")
+    image_style["must_have"] = must_have
+
+    # 4. 构建 operator_control 可编辑面板
+    edit_panels = _build_operator_panels(image_style, workflow_steps)
+
+    # 5. 构建完整性规则
+    consistency_rules: List[str] = list(image_style.get("consistency_rules", []))
+
+    return SkillRulesNodeOutput(
+        image_style_rules={
+            "aspect_ratio": image_style.get("aspect_ratio", "3:4"),
+            "style": image_style.get("style", "cartoon"),
+            "reference_image_notes": image_style.get("reference_image_notes", []),
+            "reference_image_urls": image_style.get("reference_image_urls", []),
+            "must_have": image_style.get("must_have", []),
+            "avoid": image_style.get("avoid", []),
+            "consistency_rules": consistency_rules
+        },
+        workflow_steps=workflow_steps,
+        operator_control_edit_panels=edit_panels,
+        synced_skill_rules_cfg=image_style
+    )
