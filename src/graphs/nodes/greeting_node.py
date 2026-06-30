@@ -1,111 +1,67 @@
-"""
-节点1: 对标与需求挖掘 (greeting_node)
-──────────────────────────────────────
-输入: niche, audience, goal, benchmark_notes, comment_notes
-输出: research_brief, benchmark_accounts, demand_insights
-"""
-import json
-import re
-from typing import Any, Dict, List, Optional
+"""节点 1/8 — 对标与需求挖掘 (greeting)"""
+
+import json, os
+from typing import Any, Dict, List
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.runtime import Runtime
 from coze_coding_utils.runtime_ctx.context import Context
+from jinja2 import Template
 
 from graphs.state import (
-    GreetingNodeInput,
-    GreetingNodeOutput,
-    BenchmarkAccount,
-    DemandInsight,
+    BenchmarkAccount, DemandInsight,
+    GreetingNodeInput, GreetingNodeOutput,
 )
+from graphs.nodes.http_utils import call_openai_chat
 
 
-# ── 通用辅助 ──────────────────────────────────────────────
-def _get(obj: Any, key: str, default: Any = None) -> Any:
-    """从 dict / pydantic / namespace 取值。"""
-    if isinstance(obj, dict):
-        return obj.get(key, default)
-    return getattr(obj, key, default)
+def _require_api_keys(state: GreetingNodeInput) -> str:
+    missing: List[str] = []
+    if state.execute_model_calls and not state.openai_api_key:
+        missing.append("OpenAI API Key")
+    if state.execute_model_calls and not state.grok_api_key:
+        missing.append("Grok API Key")
+    if missing:
+        raise ValueError(f"运行工作流前必须输入：{', '.join(missing)}。")
+    return "ok"
 
 
-def _dump(obj: Any) -> Any:
-    """转为 JSON-safe 结构。"""
-    if obj is None:
-        return None
-    if isinstance(obj, (str, int, float, bool)):
-        return obj
-    if isinstance(obj, list):
-        return [_dump(i) for i in obj]
-    if isinstance(obj, dict):
-        return {k: _dump(v) for k, v in obj.items()}
-    if hasattr(obj, "model_dump"):
-        return obj.model_dump()
-    if hasattr(obj, "__dict__"):
-        return {k: _dump(v) for k, v in obj.__dict__.items() if not k.startswith("_")}
-    return obj
+def _build_benchmark_accounts(benchmark_notes: List[str]) -> List[BenchmarkAccount]:
+    accounts: List[BenchmarkAccount] = []
+    for idx, note in enumerate(benchmark_notes, 1):
+        accounts.append(BenchmarkAccount(
+            name=f"对标线索 {idx}",
+            platform="小红书",
+            signal=note,
+            content_patterns=[note],
+            visual_patterns=[],
+            risk_notes=["只复用结构和需求信号，不复刻原文、封面或人设"],
+        ))
+    return accounts
 
 
-# ── 分类映射 ──────────────────────────────────────────────
-_PAIN_KEYWORDS: Dict[str, List[str]] = {
-    "新手门槛": ["基础", "入门", "不会", "零基础", "小白", "开始", "从0", "第一步", "能不能做"],
-    "时间约束": ["下班", "碎片", "兼职", "时间", "忙碌", "副业", "每天"],
-    "路径不清": ["怎么开始", "步骤", "路线", "方向", "不知道先做什么", "顺序"],
-    "变现焦虑": ["赚钱", "收入", "变现", "收益", "月入", "副业收入"],
-    "信任缺失": ["真的吗", "靠谱", "骗子", "割韭菜", "真假"],
-    "技能焦虑": ["不会编程", "没有经验", "专业", "技术", "技能"],
-}
+def _build_demand_insights(comment_notes: List[str]) -> List[DemandInsight]:
+    insights: List[DemandInsight] = []
+    # 简单聚类：每条评论作为一个需求簇
+    clusters: Dict[str, List[str]] = {}
+    for note in comment_notes:
+        label = "新手门槛" if any(w in note for w in ["基础", "不会", "没有", "能不能"]) else \
+                "时间约束" if any(w in note for w in ["下班", "时间", "碎片"]) else \
+                "路径不清"
+        clusters.setdefault(label, []).append(note)
+
+    for label, notes in clusters.items():
+        insights.append(DemandInsight(
+            cluster=label,
+            user_words=notes,
+            pain=f"用户在「{label}」上的真实卡点",
+            desired_outcome=f"解决「{label}」问题",
+            content_angle=f"从{label}角度切入内容",
+            confidence="medium",
+        ))
+    return insights
 
 
-def _classify_comment(text: str) -> str:
-    t: str = text.lower()
-    for cluster, kws in _PAIN_KEYWORDS.items():
-        for kw in kws:
-            if kw in t:
-                return cluster
-    return "其他需求"
-
-
-def _build_benchmark(note: str, idx: int) -> BenchmarkAccount:
-    parts: List[str] = [p.strip() for p in re.split(r"[，,；;\n]", note) if p.strip()]
-    signal: str = parts[0] if parts else note[:60]
-    content_patterns: List[str] = parts[1:3] if len(parts) > 1 else []
-    visual_patterns: List[str] = parts[3:5] if len(parts) > 3 else []
-    risk_notes: List[str] = ["只复用结构和需求信号，不复刻原文、封面或人设"]
-    return BenchmarkAccount(
-        name=f"对标线索 {idx}",
-        platform="小红书",
-        signal=signal,
-        content_patterns=content_patterns,
-        visual_patterns=visual_patterns,
-        risk_notes=risk_notes,
-    )
-
-
-def _build_insight(comment: str) -> DemandInsight:
-    cluster: str = _classify_comment(comment)
-    return DemandInsight(
-        cluster=cluster,
-        user_words=[comment],
-        pain=f"用户在「{cluster}」上的真实卡点",
-        desired_outcome=f"解决「{cluster}」问题",
-        content_angle=f"从{cluster}角度切入内容",
-        confidence="medium",
-    )
-
-
-def _merge_insights(insights: List[DemandInsight]) -> List[DemandInsight]:
-    merged: Dict[str, DemandInsight] = {}
-    for ins in insights:
-        key: str = ins.cluster
-        if key in merged:
-            existing: DemandInsight = merged[key]
-            existing.user_words.extend(ins.user_words)
-        else:
-            merged[key] = ins.model_copy(deep=True)
-    return list(merged.values())
-
-
-# ── 节点函数 ──────────────────────────────────────────────
 def greeting_node(
     state: GreetingNodeInput,
     config: RunnableConfig,
@@ -113,37 +69,43 @@ def greeting_node(
 ) -> GreetingNodeOutput:
     """
     title: 对标与需求挖掘
-    desc: 整理对标素材与评论需求，沉淀可复用的对标线索和需求洞察
+    desc: 从对标笔记信号和评论信号中提取对标账号和需求洞察
     integrations:
     """
-    niche: str = _get(state, "niche", "")
-    audience: str = _get(state, "audience", "")
-    goal: str = _get(state, "goal", "")
-    benchmark_notes: List[str] = _get(state, "benchmark_notes", [])
-    comment_notes: List[str] = _get(state, "comment_notes", [])
+    ctx = runtime.context
+    api_key_status = _require_api_keys(state)
 
-    # 构建对标线索
-    benchmark_accounts: List[BenchmarkAccount] = []
-    for idx, note in enumerate(benchmark_notes, 1):
-        benchmark_accounts.append(_build_benchmark(note, idx))
+    benchmark_accounts = _build_benchmark_accounts(state.benchmark_notes)
+    demand_insights = _build_demand_insights(state.comment_notes)
 
-    # 构建需求洞察
-    raw_insights: List[DemandInsight] = []
-    for c in comment_notes:
-        raw_insights.append(_build_insight(c))
-    demand_insights: List[DemandInsight] = _merge_insights(raw_insights)
+    # 如果需要真实调用模型，用 OpenAI 做深度分析
+    if state.execute_model_calls and state.openai_api_key:
+        sp = f"你是小红书内容策略专家。赛道：{state.niche}，目标人群：{state.audience}。"
+        up = (
+            f"请基于以下对标信号和评论信号，分别提炼 2-3 条对标账号洞察和 2-3 个需求洞察。\n"
+            f"对标信号：{json.dumps(state.benchmark_notes, ensure_ascii=False)}\n"
+            f"评论信号：{json.dumps(state.comment_notes, ensure_ascii=False)}\n"
+            f"约束：{json.dumps(state.constraints, ensure_ascii=False)}\n"
+            f"请返回 JSON：{{\"benchmark_accounts\": [...], \"demand_insights\": [...]}}"
+        )
+        raw = call_openai_chat(state.openai_api_key, system_prompt=sp, user_prompt=up)
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                ba_list = parsed.get("benchmark_accounts", [])
+                di_list = parsed.get("demand_insights", [])
+                if isinstance(ba_list, list) and len(ba_list) > 0:
+                    benchmark_accounts = [BenchmarkAccount(**a) if isinstance(a, dict) else a for a in ba_list]
+                if isinstance(di_list, list) and len(di_list) > 0:
+                    demand_insights = [DemandInsight(**d) if isinstance(d, dict) else d for d in di_list]
+        except (json.JSONDecodeError, TypeError):
+            pass  # fallback to rule-based results
 
-    # 生成摘要
-    brief_parts: List[str] = []
-    if niche:
-        brief_parts.append(f"领域：{niche}")
-    if audience:
-        brief_parts.append(f"人群：{audience}")
-    if goal:
-        brief_parts.append(f"目标：{goal}")
-    brief_parts.append(f"对标线索 {len(benchmark_accounts)} 条")
-    brief_parts.append(f"需求洞察 {len(demand_insights)} 组")
-    research_brief: str = "；".join(brief_parts)
+    research_brief = (
+        f"赛道「{state.niche}」面向「{state.audience}」，"
+        f"已整理 {len(benchmark_accounts)} 条对标线索、"
+        f"{len(demand_insights)} 组需求。"
+    )
 
     return GreetingNodeOutput(
         research_brief=research_brief,

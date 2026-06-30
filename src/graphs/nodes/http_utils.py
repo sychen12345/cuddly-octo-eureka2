@@ -1,83 +1,60 @@
-"""
-HTTP 工具函数 — 封装 OpenAI / Grok REST API 调用。
-"""
-import json
-import logging
-import urllib.request
-import urllib.error
+"""HTTP 工具 — OpenAI / Grok API 调用封装"""
+
+import json, logging, os, time
 from typing import Any, Dict, Optional
+
+import requests
 
 logger = logging.getLogger(__name__)
 
+# ── 通用请求 ──────────────────────────────────────────────
 
-def _request(
-    url: str,
-    headers: Dict[str, str],
-    payload: Dict[str, Any],
-    timeout: int = 60,
-) -> Dict[str, Any]:
-    """通用 HTTP POST，返回 JSON dict 或抛异常。"""
-    data: bytes = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            body: bytes = resp.read()
-            return json.loads(body.decode("utf-8"))  # type: ignore[no-any-return]
-    except urllib.error.HTTPError as exc:
-        err_body: bytes = exc.read()
-        logger.error("HTTP %s %s → %s", exc.code, url, err_body[:500])
-        raise RuntimeError(f"HTTP {exc.code}: {err_body[:500].decode('utf-8', errors='replace')}") from exc
-    except Exception as exc:
-        logger.error("Request failed %s: %s", url, exc)
-        raise
+def _post_json(url: str, headers: Dict[str, str], payload: Dict[str, Any], timeout: int = 60) -> Dict[str, Any]:
+    resp = requests.post(url, headers=headers, json=payload, timeout=timeout)
+    resp.raise_for_status()
+    result: Dict[str, Any] = resp.json()
+    return result
 
+# ── OpenAI Chat ───────────────────────────────────────────
 
-def call_openai(
+def call_openai_chat(
     api_key: str,
-    model: str,
-    messages: list,
+    model: str = "gpt-4o",
+    system_prompt: str = "",
+    user_prompt: str = "",
     temperature: float = 0.4,
     max_tokens: int = 4096,
-    reasoning_effort: Optional[str] = None,
-    timeout: int = 120,
-) -> Dict[str, Any]:
-    """调用 OpenAI Chat Completions API。"""
-    url: str = "https://api.openai.com/v1/chat/completions"
-    headers: Dict[str, str] = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-    payload: Dict[str, Any] = {
+    base_url: str = "https://api.openai.com/v1",
+) -> str:
+    url = f"{base_url}/chat/completions"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {
         "model": model,
-        "messages": messages,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
         "temperature": temperature,
         "max_tokens": max_tokens,
     }
-    if reasoning_effort:
-        payload["reasoning_effort"] = reasoning_effort
-    return _request(url, headers, payload, timeout=timeout)
+    data = _post_json(url, headers, payload)
+    content: str = data["choices"][0]["message"]["content"]
+    return content
 
+# ── Grok Image ────────────────────────────────────────────
 
 def call_grok_image(
     api_key: str,
-    model: str,
     prompt: str,
+    model: str = "grok-2-image",
     n: int = 1,
     size: str = "1024x1365",
     quality: str = "hd",
-    timeout: int = 180,
-) -> Dict[str, Any]:
-    """调用 Grok (xAI) 图像生成 API。"""
-    url: str = "https://api.x.ai/v1/images/generations"
-    headers: Dict[str, str] = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-    payload: Dict[str, Any] = {
-        "model": model,
-        "prompt": prompt,
-        "n": n,
-        "size": size,
-        "quality": quality,
-    }
-    return _request(url, headers, payload, timeout=timeout)
+    base_url: str = "https://api.x.ai/v1",
+) -> str:
+    url = f"{base_url}/images/generations"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {"model": model, "prompt": prompt, "n": n, "size": size, "quality": quality}
+    data = _post_json(url, headers, payload, timeout=120)
+    image_url: str = data["data"][0]["url"]
+    return image_url

@@ -1,9 +1,10 @@
 """
 小红书内容工作流 — 主图编排
 ───────────────────────────
-开始 -> 对标与需求挖掘 -> 选题库与高浏览选题 -> Skill规则与参考图
--> OpenAI/Grok Skill 子流程 -> 在线提示词编辑 -> OpenAI GPT5.5 文案
--> Grok Expert 套图 -> 结果审核打包 -> 结束
+开始 -> 对标与需求挖掘 -> 选题库 -> Skill规则 -> 子流程 -> 提示词编辑
+      ─┬─ OpenAI 文案  (并行)
+       └─ Grok 套图   (并行)
+      → 结果审核打包 -> 结束
 """
 from langgraph.graph import StateGraph, END
 
@@ -41,14 +42,20 @@ builder.add_node("finalize", finalize_node)
 # ── 设置入口 ──────────────────────────────────────────────
 builder.set_entry_point("greeting")
 
-# ── 线性链路 ──────────────────────────────────────────────
+# ── 串行链路：greeting → process → skill_rules → skill_subflow → prompt ──
 builder.add_edge("greeting", "process")
 builder.add_edge("process", "skill_rules")
 builder.add_edge("skill_rules", "skill_subflow")
 builder.add_edge("skill_subflow", "prompt")
+
+# ── 并行：prompt 分两路 → openai_text / grok_image ──────────
 builder.add_edge("prompt", "openai_text")
-builder.add_edge("openai_text", "grok_image")
-builder.add_edge("grok_image", "finalize")
+builder.add_edge("prompt", "grok_image")
+
+# ── 并行汇聚：openai_text + grok_image → finalize ───────────
+builder.add_edge(["openai_text", "grok_image"], "finalize")
+
+# ── 结束 ─────────────────────────────────────────────────
 builder.add_edge("finalize", END)
 
 # ── 编译 ──────────────────────────────────────────────────
