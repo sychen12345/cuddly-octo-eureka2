@@ -52,6 +52,7 @@ class CardPage(BaseModel):
     headline: str = Field(default="", description="卡片标题")
     body: str = Field(default="", description="卡片正文")
     visual_prompt: str = Field(default="", description="视觉提示词")
+    image_url: str = Field(default="", description="Grok 生成的配图 URL")
 
 class SkillSubflowStep(BaseModel):
     step_key: str = Field(default="", description="步骤标识")

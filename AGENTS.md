@@ -21,7 +21,7 @@
 | prompt | `nodes/prompt_node.py` | task | 在线提示词编辑 | - | - |
 | openai_text | `nodes/openai_text_node.py` | task | OpenAI GPT5.5 文案生成 | - | - |
 | grok_image | `nodes/grok_image_node.py` | task | Grok Expert 套图生成 | - | - |
-| finalize | `nodes/finalize_node.py` | task | 结果审核打包 | - | - |
+| finalize | `nodes/finalize_node.py` | task | 结果审核打包：将Grok图片URL嵌入GPT5.5卡片文案，智能生成话题标签（如#芯片 #拍照 #美甲） | - | - |
 
 **类型说明**: task(任务节点) / agent(大模型) / condition(条件分支) / looparray(列表循环) / loopcond(条件循环)
 
