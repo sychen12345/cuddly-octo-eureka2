@@ -72,6 +72,38 @@ class EditablePrompt(BaseModel):
     editable: bool = Field(default=True, description="是否允许在线编辑")
 
 
+class SkillSubflowStep(BaseModel):
+    """可视化 skill 子流程中的一个可编辑步骤。"""
+
+    step_key: str = Field(..., description="子流程步骤键名")
+    title: str = Field(..., description="步骤标题")
+    node_type: str = Field(default="prompt", description="prompt/model/review/rule")
+    model_or_tool: str = Field(default="", description="该步骤使用的模型或工具")
+    prompt_key: str = Field(default="", description="关联提示词键名")
+    default_prompt: str = Field(default="", description="默认步骤提示词")
+    final_prompt: str = Field(default="", description="运营修改后的最终步骤提示词")
+    input_keys: List[str] = Field(default_factory=list, description="步骤输入字段")
+    output_keys: List[str] = Field(default_factory=list, description="步骤输出字段")
+    editable: bool = Field(default=True, description="是否允许在工作流中编辑")
+    enabled: bool = Field(default=True, description="是否启用该步骤")
+    notes: str = Field(default="", description="给运营看的编辑说明")
+
+
+class SkillSubflow(BaseModel):
+    """OpenAI/Grok 可视化可编辑 skill 子流程。"""
+
+    skill_key: str = Field(..., description="子流程 skill 键名")
+    title: str = Field(..., description="子流程标题")
+    provider: str = Field(..., description="模型供应商")
+    model: str = Field(default="", description="默认模型")
+    mode: str = Field(default="", description="推理或生成模式")
+    endpoint: str = Field(default="", description="真实调用 endpoint")
+    description: str = Field(default="", description="子流程用途")
+    editable: bool = Field(default=True, description="是否允许运营在线修改")
+    steps: List[SkillSubflowStep] = Field(default_factory=list, description="可视化步骤")
+    status: str = Field(default="ready", description="ready/dry_run/completed/failed")
+
+
 class ModelRequest(BaseModel):
     """模型调用计划或真实调用摘要。API Key 不进入 payload。"""
 
@@ -79,6 +111,7 @@ class ModelRequest(BaseModel):
     model: str = Field(..., description="模型名")
     mode: str = Field(default="", description="推理/生成模式")
     endpoint: str = Field(default="", description="建议 API endpoint")
+    skill_key: str = Field(default="", description="关联 skill/subflow key")
     prompt_key: str = Field(default="", description="关联提示词键名")
     payload: Dict[str, Any] = Field(default_factory=dict, description="建议请求载荷")
     dry_run: bool = Field(default=True, description="是否仅生成请求计划")
@@ -107,7 +140,9 @@ class ImageGenerationItem(BaseModel):
     prompt: str = Field(..., description="Grok Expert 生图提示词")
     aspect_ratio: str = Field(default="3:4")
     style: str = Field(default="cartoon")
-    request: ModelRequest = Field(default_factory=lambda: ModelRequest(provider="grok", model="grok-imagine-image-quality"))
+    request: ModelRequest = Field(
+        default_factory=lambda: ModelRequest(provider="grok", model="grok-imagine-image-quality")
+    )
     image_url: str = Field(default="", description="真实调用后可填充的图片链接")
     status: str = Field(default="dry_run")
 
@@ -179,6 +214,7 @@ class GlobalState(BaseModel):
     reference_image_notes: List[str] = Field(default_factory=list, description="参考图规则")
     reference_image_urls: List[str] = Field(default_factory=list, description="参考图链接")
     prompt_overrides: Dict[str, str] = Field(default_factory=dict, description="在线提示词覆盖")
+    skill_flow_overrides: Dict[str, Any] = Field(default_factory=dict, description="在线修改 OpenAI/Grok 子流程")
     openai_text_model: str = Field(default="gpt-5.5", description="OpenAI 文案模型")
     openai_reasoning_mode: str = Field(default="ultra_high", description="OpenAI 推理模式")
     grok_image_model: str = Field(default="grok-imagine-image-quality", description="Grok 生图模型")
@@ -200,6 +236,7 @@ class GlobalState(BaseModel):
     )
     image_style_rules: ImageStyleRule = Field(default_factory=ImageStyleRule)
     workflow_steps: List[WorkflowStep] = Field(default_factory=list)
+    skill_subflows: List[SkillSubflow] = Field(default_factory=list)
     editable_prompts: List[EditablePrompt] = Field(default_factory=list)
     openai_text_package: TextDescriptionPackage = Field(default_factory=TextDescriptionPackage)
     grok_image_set: ImageSetPackage = Field(default_factory=ImageSetPackage)
@@ -230,6 +267,7 @@ class GraphInput(BaseModel):
     reference_image_notes: List[str] = Field(default_factory=list, description="参考图规则")
     reference_image_urls: List[str] = Field(default_factory=list, description="参考图链接")
     prompt_overrides: Dict[str, str] = Field(default_factory=dict, description="在线提示词覆盖")
+    skill_flow_overrides: Dict[str, Any] = Field(default_factory=dict, description="在线修改 OpenAI/Grok 子流程")
     openai_text_model: str = Field(default="gpt-5.5", description="OpenAI 文案模型")
     openai_reasoning_mode: str = Field(default="ultra_high", description="OpenAI 推理模式")
     grok_image_model: str = Field(default="grok-imagine-image-quality", description="Grok 生图模型")
@@ -247,6 +285,7 @@ class GraphOutput(BaseModel):
     topic_bank: List[TopicRecord] = Field(default_factory=list)
     selected_topic: TopicRecord = Field(..., description="本轮选中的高潜选题")
     image_style_rules: ImageStyleRule = Field(..., description="3:4 卡通套图规则")
+    skill_subflows: List[SkillSubflow] = Field(default_factory=list, description="OpenAI/Grok 可编辑子流程")
     editable_prompts: List[EditablePrompt] = Field(default_factory=list)
     openai_text_package: TextDescriptionPackage = Field(..., description="OpenAI GPT5.5 文案包")
     grok_image_set: ImageSetPackage = Field(..., description="Grok Expert 套图计划或结果")
@@ -287,6 +326,16 @@ class SkillRulesNodeOutput(BaseModel):
 
     image_style_rules: ImageStyleRule = Field(..., description="3:4 卡通套图规则")
     workflow_steps: List[WorkflowStep] = Field(default_factory=list)
+
+
+class SkillSubflowNodeInput(GlobalState):
+    """OpenAI/Grok 子流程构建节点输入。"""
+
+
+class SkillSubflowNodeOutput(BaseModel):
+    """OpenAI/Grok 子流程构建节点输出。"""
+
+    skill_subflows: List[SkillSubflow] = Field(default_factory=list)
 
 
 class PromptNodeInput(GlobalState):

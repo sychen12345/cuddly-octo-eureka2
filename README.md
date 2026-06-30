@@ -1,6 +1,6 @@
 # 小红书内容全栈工作流
 
-这个项目把 Coze 生成的最小 Python 工作流，改造成一个「找对标 -> 挖评论需求 -> 选择高浏览选题 -> 在线改提示词 -> OpenAI 生成文字描述 -> Grok 生成 3:4 卡通套图 -> 审核打包」的内容生产流程。目标是让使用者只输入几句指令，就能得到可审核、可复用、可继续生产的小红书图文方案。
+这个项目把 Coze 生成的最小 Python 工作流，改造成一个「找对标 -> 挖评论需求 -> 选择高浏览选题 -> 生成可编辑 OpenAI/Grok 子流程 -> 在线改提示词 -> OpenAI 生成文字描述 -> Grok 生成 3:4 卡通套图 -> 审核打包」的内容生产流程。目标是让使用者只输入几句指令，就能得到可审核、可复用、可继续生产的小红书图文方案。
 
 ## 资料依据
 
@@ -74,7 +74,8 @@
 - `image_style`：默认 `cartoon`。
 - `reference_image_notes`：用户提供参考图时，把角色、色彩、线条、镜头、情绪等观察写入这里。
 - `reference_image_urls`：参考图链接。
-- `prompt_overrides`：在线修改工作流提示词，支持 `topic_selection`、`openai_text_description`、`grok_expert_image_set`、`final_review`。
+- `prompt_overrides`：在线修改工作流提示词，支持 `topic_selection`、`openai_text_description`、`grok_expert_image_set`、`final_review`，也支持 `openai_text_skill.generate_xhs_text` 这类子流程步骤 prompt key。
+- `skill_flow_overrides`：在线修改 OpenAI/Grok 两个 skill 子流程，支持改模型、模式、步骤标题、步骤提示词和启用状态。
 - `openai_text_model`：默认 `gpt-5.5`，用于 OpenAI 文案节点。
 - `openai_reasoning_mode`：默认 `ultra_high`，用于 GPT5.5 超高推理模式。
 - `grok_image_model`：默认 `grok-imagine-image-quality`，用于 Grok Expert/xAI 生图节点。
@@ -114,36 +115,48 @@
 - 参考本地/下载的视觉类 skill，把 3:4、卡通风格、套图一致性、参考图吸收规则写入 `image_style_rules`。
 - 输出完整 `workflow_steps`，让画布和结果都能直观看到完整 skill 流程。
 
-### 4. 在线提示词编辑节点
+### 4. OpenAI/Grok Skill 子流程节点
+
+文件：`cozepy/skill_subflow_node.py`
+
+职责：
+
+- 把 OpenAI 文案生成和 Grok 套图生成拆成两个可视化子流程：`openai_text_skill`、`grok_image_skill`。
+- 每个子流程包含可编辑步骤，例如整理上下文、生成文案、审核图片 brief、读取视觉规则、生成每页图片提示词、审核套图一致性。
+- 应用 `skill_flow_overrides`，让运营在工作流运行时改步骤提示词、模型、模式、标题和启用状态。
+
+### 5. 在线提示词编辑节点
 
 文件：`cozepy/prompt_node.py`
 
 职责：
 
 - 输出 `editable_prompts`，包含默认提示词和应用 `prompt_overrides` 后的最终提示词。
-- 让用户在线修改 OpenAI 文案提示词、Grok 生图提示词、最终审核提示词。
+- 展开 `skill_subflows` 中的可编辑步骤，让运营可以精确修改 OpenAI/Grok 子流程内的某一步。
 
-### 5. OpenAI GPT5.5 超高推理文案节点
+### 6. OpenAI GPT5.5 超高推理文案节点
 
 文件：`cozepy/openai_text_node.py`
 
 职责：
 
+- 调用 `openai_text_skill` 子流程，把启用的子步骤组合成 OpenAI 输入。
 - 使用 `openai_text_model` 和 `openai_reasoning_mode` 生成文字描述；默认 `ultra_high` 会映射为 OpenAI API 的 `reasoning.effort=xhigh`。
 - `execute_model_calls=false` 时只输出可审核请求计划；`true` 时真实请求 `https://api.openai.com/v1/responses`。
 - 输出封面标题、每页脚本、小红书正文、给 Grok 的视觉 brief。
 
-### 6. Grok Expert 3:4 卡通套图节点
+### 7. Grok Expert 3:4 卡通套图节点
 
 文件：`cozepy/grok_image_node.py`
 
 职责：
 
+- 调用 `grok_image_skill` 子流程，把启用的子步骤组合成每页图片 prompt。
 - 使用 `grok_image_model` 和 `grok_image_mode` 为每页生成 3:4 竖版卡通图提示词。
 - `execute_model_calls=false` 时只输出图片请求计划；`true` 时真实请求 `https://api.x.ai/v1/images/generations` 并回填 `image_url`。
 - 继承参考图规则、套图一致性规则和避免事项。
 
-### 7. 结果审核打包节点
+### 8. 结果审核打包节点
 
 文件：`cozepy/finalize_node.py`
 
@@ -163,6 +176,7 @@
 - `topic_bank`：可沉淀到知识库的选题库。
 - `selected_topic`：本轮选中的高潜选题。
 - `image_style_rules`：3:4 卡通套图规则。
+- `skill_subflows`：OpenAI/Grok 两个可视化可编辑 skill 子流程。
 - `editable_prompts`：在线可修改提示词。
 - `openai_text_package`：OpenAI GPT5.5 文案包、请求计划或真实调用状态。
 - `grok_image_set`：Grok Expert 套图提示、请求计划或真实图片 URL。
@@ -202,11 +216,39 @@ result = main_graph.invoke({
     "image_style": "cartoon",
     "execute_model_calls": False,
     "reference_image_notes": ["圆润线条", "明亮但不刺眼", "主角表情夸张但不幼稚"],
+    "skill_flow_overrides": {
+        "openai_text_skill": {
+            "steps": {
+                "generate_xhs_text": {
+                    "prompt": "用更适合运营复盘的语气生成标题、卡片脚本、正文和视觉 brief。"
+                }
+            }
+        },
+        "grok_image_skill": {
+            "steps": {
+                "compose_page_prompts": {
+                    "prompt": "生成 3:4 竖版卡通套图，统一角色、统一色板、每页只表达一个核心动作。"
+                }
+            }
+        }
+    },
     "prompt_overrides": {
-        "grok_expert_image_set": "生成 3:4 竖版卡通套图，统一角色、统一色板、每页只表达一个核心动作。"
+        "final_review": "重点检查 API Key 不泄露、选题证据充分、图片提示词确实来自可编辑子流程。"
     }
 })
 ```
+
+## 测试
+
+```bash
+python3 -m unittest tests.test_xhs_skill_subflows
+```
+
+测试覆盖：
+
+- `skill_subflows` 输出两个可视化可编辑子流程：`openai_text_skill` 和 `grok_image_skill`。
+- `skill_flow_overrides` 能修改步骤 prompt、启用状态，并进入 OpenAI/Grok 请求 payload。
+- mock live-call 会调用 OpenAI 1 次、Grok 6 次，并回填图片 URL；API Key 不进入输出。
 
 ## 审核原则
 

@@ -1,4 +1,4 @@
 interface:
   display_name: "XHS Content Workflow"
-  short_description: "High-view XHS topics, GPT text, Grok cartoon sets"
-  default_prompt: "Use $xhs-content-workflow to choose a high-view Xiaohongshu topic, edit prompts, draft OpenAI text, and create Grok 3:4 cartoon image prompts."
+  short_description: "High-view XHS topics, editable GPT/Grok subflows"
+  default_prompt: "Use $xhs-content-workflow to choose a high-view Xiaohongshu topic, edit OpenAI/Grok skill subflows, draft GPT text, and create Grok 3:4 cartoon image prompts."

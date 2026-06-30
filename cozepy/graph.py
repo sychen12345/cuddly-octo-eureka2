@@ -2,7 +2,8 @@
 主工作流编排。
 
 GraphInput -> 对标与需求挖掘 -> 选题库与高浏览选题 -> Skill规则与参考图
--> 在线提示词编辑 -> OpenAI GPT5.5 文案 -> Grok Expert 套图 -> 结果审核打包 -> GraphOutput
+-> OpenAI/Grok Skill 子流程 -> 在线提示词编辑 -> OpenAI GPT5.5 文案
+-> Grok Expert 套图 -> 结果审核打包 -> GraphOutput
 """
 from __future__ import annotations
 
@@ -21,6 +22,7 @@ try:
     from graphs.nodes.openai_text_node import openai_text_node
     from graphs.nodes.prompt_node import prompt_node
     from graphs.nodes.process_node import process_node
+    from graphs.nodes.skill_subflow_node import skill_subflow_node
     from graphs.nodes.skill_rules_node import skill_rules_node
     from graphs.state import GlobalState, GraphInput, GraphOutput
 except ImportError:
@@ -30,6 +32,7 @@ except ImportError:
     from .openai_text_node import openai_text_node
     from .prompt_node import prompt_node
     from .process_node import process_node
+    from .skill_subflow_node import skill_subflow_node
     from .skill_rules_node import skill_rules_node
     from .state import GlobalState, GraphInput, GraphOutput
 
@@ -60,6 +63,9 @@ class LocalContentWorkflow:
         rules_output = skill_rules_node(state)
         state = GlobalState(**{**_dump(state), **_dump(rules_output)})
 
+        subflow_output = skill_subflow_node(state)
+        state = GlobalState(**{**_dump(state), **_dump(subflow_output)})
+
         prompt_output = prompt_node(state)
         state = GlobalState(**{**_dump(state), **_dump(prompt_output)})
 
@@ -81,6 +87,7 @@ class LocalContentWorkflow:
                 topic_bank=state.topic_bank,
                 selected_topic=state.selected_topic,
                 image_style_rules=state.image_style_rules,
+                skill_subflows=state.skill_subflows,
                 editable_prompts=state.editable_prompts,
                 openai_text_package=state.openai_text_package,
                 grok_image_set=state.grok_image_set,
@@ -100,6 +107,7 @@ if StateGraph is not None:
     builder.add_node("benchmark_and_demand", greeting_node)
     builder.add_node("topic_selection", process_node)
     builder.add_node("skill_rules", skill_rules_node)
+    builder.add_node("skill_subflows", skill_subflow_node)
     builder.add_node("prompt_editor", prompt_node)
     builder.add_node("openai_text", openai_text_node)
     builder.add_node("grok_image_set", grok_image_node)
@@ -108,7 +116,8 @@ if StateGraph is not None:
     builder.set_entry_point("benchmark_and_demand")
     builder.add_edge("benchmark_and_demand", "topic_selection")
     builder.add_edge("topic_selection", "skill_rules")
-    builder.add_edge("skill_rules", "prompt_editor")
+    builder.add_edge("skill_rules", "skill_subflows")
+    builder.add_edge("skill_subflows", "prompt_editor")
     builder.add_edge("prompt_editor", "openai_text")
     builder.add_edge("openai_text", "grok_image_set")
     builder.add_edge("grok_image_set", "finalize")

@@ -1,8 +1,8 @@
 """
 在线提示词编辑节点。
 
-通过 GraphInput.prompt_overrides 覆盖默认提示词，让用户可以在 Coze 运行时
-直接修改 OpenAI 文案、Grok 生图和最终审核提示词。
+通过 GraphInput.prompt_overrides 和 skill_flow_overrides 覆盖默认提示词，让用户可以
+在 Coze 运行时直接修改 OpenAI/Grok 子流程中的每一步。
 """
 from __future__ import annotations
 
@@ -50,6 +50,32 @@ def _selected_title(state: Any) -> str:
     return str(_dump(selected).get("title", "")).strip()
 
 
+def _subflow_prompts(state: Any) -> list[EditablePrompt]:
+    prompts = []
+    for subflow in _get(state, "skill_subflows", []) or []:
+        subflow_data = _dump(subflow)
+        subflow_title = str(subflow_data.get("title", "")).strip()
+        for step in subflow_data.get("steps", []) or []:
+            step_data = _dump(step)
+            if not step_data.get("editable", True):
+                continue
+            prompt_key = str(step_data.get("prompt_key", "")).strip()
+            if not prompt_key:
+                continue
+            prompts.append(
+                EditablePrompt(
+                    key=prompt_key,
+                    title=f"{subflow_title} / {step_data.get('title', '')}",
+                    target_model=str(step_data.get("model_or_tool", "")).strip() or str(subflow_data.get("model", "")),
+                    default_prompt=str(step_data.get("default_prompt", "")).strip(),
+                    final_prompt=str(step_data.get("final_prompt", "")).strip()
+                    or str(step_data.get("default_prompt", "")).strip(),
+                    editable=bool(step_data.get("editable", True)),
+                )
+            )
+    return prompts
+
+
 def prompt_node(
     state: PromptNodeInput,
     config: RunnableConfig | None = None,
@@ -57,7 +83,7 @@ def prompt_node(
 ) -> PromptNodeOutput:
     """
     title: 在线提示词编辑
-    desc: 输出可在线修改的提示词块，并应用用户 prompt_overrides
+    desc: 输出可在线修改的提示词块，并应用 prompt/subflow 覆盖
     integrations:
     """
     niche = str(_get(state, "niche", "")).strip()
@@ -108,4 +134,5 @@ def prompt_node(
         )
         for key, default_prompt in defaults.items()
     ]
+    prompts.extend(_subflow_prompts(state))
     return PromptNodeOutput(editable_prompts=prompts)

@@ -25,7 +25,7 @@ If the user gives only a short instruction, proceed with explicit assumptions an
 
 When the user wants current market evidence, search the web or the target platform if tools and permissions allow it. If live data is unavailable, clearly mark the result as a research framework or hypothesis and provide a sampling checklist.
 
-For the bundled Coze-style Python workflow, require runtime `grok_api_key` and `openai_api_key` inputs before any node runs. Never echo, log, or include those API keys in final outputs. Treat `prompt_overrides` as the online prompt editor for the workflow. Keep `execute_model_calls=false` for dry-run request plans; set it to `true` only when the workflow should directly call OpenAI Responses API and xAI/Grok image generation with the runtime keys.
+For the bundled Coze-style Python workflow, require runtime `grok_api_key` and `openai_api_key` inputs before any node runs. Never echo, log, or include those API keys in final outputs. Treat `prompt_overrides` as the online prompt editor for individual prompts and `skill_flow_overrides` as the editor for the OpenAI/Grok skill subflows. Keep `execute_model_calls=false` for dry-run request plans; set it to `true` only when the workflow should directly call OpenAI Responses API and xAI/Grok image generation with the runtime keys.
 
 ## Workflow
 
@@ -49,22 +49,29 @@ For the bundled Coze-style Python workflow, require runtime `grok_api_key` and `
    - Use `user_selected_topic` when present, while still carrying evidence and risk notes.
    - Include source traces from benchmark notes or comments so future users can audit why the topic exists.
 
-5. Build editable prompts.
-   - Produce prompt blocks for topic selection, OpenAI text generation, Grok Expert image generation, and final review.
+5. Build editable OpenAI/Grok skill subflows.
+   - Expose `openai_text_skill` and `grok_image_skill` as visual subflows with editable steps.
+   - Apply `skill_flow_overrides` to step prompts, models, modes, titles, and enabled flags.
+   - Use enabled subflow steps as the actual model input for OpenAI text generation and Grok image generation.
+
+6. Build editable prompts.
+   - Produce prompt blocks for topic selection, OpenAI text generation, Grok Expert image generation, final review, and each editable subflow step.
    - Apply user-provided overrides without losing the default prompts.
 
-6. Generate text with OpenAI.
+7. Generate text with OpenAI.
    - Use GPT5.5 ultra-high reasoning mode when available/configured.
    - In the Python workflow, `ultra_high` maps to OpenAI API `reasoning.effort=xhigh`.
+   - Call the configured `openai_text_skill` subflow, not a loose standalone prompt.
    - Produce title options, page-by-page card script, caption, CTA, and a visual brief for the image model.
 
-7. Generate a Grok Expert image set.
+8. Generate a Grok Expert image set.
    - Produce 3:4 vertical cartoon prompts for each card page.
    - Use the configured xAI image model, defaulting to `grok-imagine-image-quality`, while keeping `grok_image_mode=Expert` as the workflow mode.
+   - Call the configured `grok_image_skill` subflow, not a loose standalone prompt.
    - Use reference image notes to define character, color, line, lens, mood, and composition rules.
    - Keep the image set visually consistent across pages.
 
-8. Generate the card package.
+9. Generate the card package.
    - Pick the strongest topic unless the user chooses one.
    - Produce cover headline options, page-by-page card copy, Grok image prompts, caption, hashtags, CTA, and review checklist.
    - Keep cards scannable: one idea per page, concrete examples, minimal jargon, and no unsupported outcome claims.
@@ -81,12 +88,13 @@ Return sections in this order unless the user asks for a different format:
 4. `选题库`
 5. `选中的高浏览选题`
 6. `完整工作流节点`
-7. `可在线编辑提示词`
-8. `OpenAI GPT5.5 文案包`
-9. `Grok Expert 3:4 卡通套图`
-10. `图文卡片包`
-11. `下一步指令`
-12. `审核清单`
+7. `可视化 skill 子流程`
+8. `可在线编辑提示词`
+9. `OpenAI GPT5.5 文案包`
+10. `Grok Expert 3:4 卡通套图`
+11. `图文卡片包`
+12. `下一步指令`
+13. `审核清单`
 
 ## Quality Gates
 
@@ -99,6 +107,7 @@ Return sections in this order unless the user asks for a different format:
 - Require 3:4 vertical aspect ratio for image-set prompts unless the user explicitly changes it.
 - Use cartoon style by default; absorb reference-image rules without copying protected artwork.
 - Keep prompt blocks editable and preserve both default and final prompt values.
+- Keep OpenAI/Grok skill subflows visible and editable; do not collapse them into a single opaque prompt.
 - For card copy, prioritize clarity and usefulness over dramatic language.
 
 ## Good Trigger Prompts

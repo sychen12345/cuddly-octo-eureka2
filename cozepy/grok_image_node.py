@@ -65,6 +65,28 @@ def _prompt(state: Any, key: str) -> str:
     return ""
 
 
+def _subflow(state: Any, skill_key: str) -> Dict[str, Any]:
+    for subflow in _get(state, "skill_subflows", []) or []:
+        data = _dump(subflow)
+        if data.get("skill_key") == skill_key:
+            return data
+    return {}
+
+
+def _subflow_prompt(subflow: Dict[str, Any], fallback: str) -> str:
+    blocks = []
+    for step in subflow.get("steps", []) or []:
+        data = _dump(step)
+        if not data.get("enabled", True):
+            continue
+        prompt = str(data.get("final_prompt") or data.get("default_prompt") or "").strip()
+        if not prompt:
+            continue
+        title = str(data.get("title", data.get("step_key", ""))).strip()
+        blocks.append(f"[{title}]\n{prompt}" if title else prompt)
+    return "\n\n".join(blocks).strip() or fallback
+
+
 def _extract_image_url(response: Dict[str, Any]) -> str:
     data = response.get("data")
     if not isinstance(data, list) or not data:
@@ -93,11 +115,15 @@ def grok_image_node(
     """
     image_rules = _dump(_get(state, "image_style_rules", {}))
     text_package = _dump(_get(state, "openai_text_package", {}))
-    model = str(_get(state, "grok_image_model", "grok-imagine-image-quality")).strip() or "grok-imagine-image-quality"
-    mode = str(_get(state, "grok_image_mode", "Expert")).strip() or "Expert"
+    image_subflow = _subflow(state, "grok_image_skill")
+    model = (
+        str(image_subflow.get("model") or _get(state, "grok_image_model", "grok-imagine-image-quality")).strip()
+        or "grok-imagine-image-quality"
+    )
+    mode = str(image_subflow.get("mode") or _get(state, "grok_image_mode", "Expert")).strip() or "Expert"
     aspect_ratio = str(image_rules.get("aspect_ratio") or _get(state, "image_aspect_ratio", "3:4"))
     style = str(image_rules.get("style") or _get(state, "image_style", "cartoon"))
-    base_prompt = _prompt(state, "grok_expert_image_set")
+    base_prompt = _subflow_prompt(image_subflow, _prompt(state, "grok_expert_image_set"))
     consistency_rules = list(image_rules.get("consistency_rules", []) or [])
     must_have = "；".join(image_rules.get("must_have", []) or [])
     avoid = "；".join(image_rules.get("avoid", []) or [])
@@ -125,8 +151,9 @@ def grok_image_node(
             provider="grok",
             model=model,
             mode=mode,
-            endpoint="https://api.x.ai/v1/images/generations",
-            prompt_key="grok_expert_image_set",
+            endpoint=str(image_subflow.get("endpoint") or "https://api.x.ai/v1/images/generations"),
+            skill_key="grok_image_skill",
+            prompt_key="grok_image_skill",
             payload={
                 "model": model,
                 "prompt": prompt,

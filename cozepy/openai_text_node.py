@@ -55,6 +55,28 @@ def _prompt(state: Any, key: str) -> str:
     return ""
 
 
+def _subflow(state: Any, skill_key: str) -> Dict[str, Any]:
+    for subflow in _get(state, "skill_subflows", []) or []:
+        data = _dump(subflow)
+        if data.get("skill_key") == skill_key:
+            return data
+    return {}
+
+
+def _subflow_prompt(subflow: Dict[str, Any], fallback: str) -> str:
+    blocks = []
+    for step in subflow.get("steps", []) or []:
+        data = _dump(step)
+        if not data.get("enabled", True):
+            continue
+        prompt = str(data.get("final_prompt") or data.get("default_prompt") or "").strip()
+        if not prompt:
+            continue
+        title = str(data.get("title", data.get("step_key", ""))).strip()
+        blocks.append(f"[{title}]\n{prompt}" if title else prompt)
+    return "\n\n".join(blocks).strip() or fallback
+
+
 def _selected_topic(state: Any) -> Dict[str, Any]:
     return _dump(_get(state, "selected_topic", {}))
 
@@ -117,7 +139,7 @@ def _response_schema(card_count: int) -> Dict[str, Any]:
     }
 
 
-def _model_input(state: Any, prompt: str, topic: Dict[str, Any], card_count: int) -> str:
+def _model_input(state: Any, prompt: str, topic: Dict[str, Any], card_count: int, subflow: Dict[str, Any]) -> str:
     context = {
         "niche": _get(state, "niche", ""),
         "audience": _get(state, "audience", ""),
@@ -128,6 +150,17 @@ def _model_input(state: Any, prompt: str, topic: Dict[str, Any], card_count: int
         "card_count": card_count,
         "image_aspect_ratio": _get(state, "image_aspect_ratio", "3:4"),
         "image_style": _get(state, "image_style", "cartoon"),
+        "skill_key": subflow.get("skill_key", "openai_text_skill"),
+        "skill_steps": [
+            {
+                "step_key": step_data.get("step_key"),
+                "title": step_data.get("title"),
+                "enabled": True,
+            }
+            for step in subflow.get("steps", []) or []
+            for step_data in [_dump(step)]
+            if step_data.get("enabled", True)
+        ],
     }
     return (
         f"{prompt}\n\n"
@@ -220,11 +253,14 @@ def openai_text_node(
     title = str(topic.get("title", "")).strip()
     audience = str(_get(state, "audience", "小红书新手用户")).strip()
     niche = str(_get(state, "niche", "")).strip()
-    model = str(_get(state, "openai_text_model", "gpt-5.5")).strip() or "gpt-5.5"
-    reasoning_mode = str(_get(state, "openai_reasoning_mode", "ultra_high")).strip() or "ultra_high"
+    text_subflow = _subflow(state, "openai_text_skill")
+    model = str(text_subflow.get("model") or _get(state, "openai_text_model", "gpt-5.5")).strip() or "gpt-5.5"
+    reasoning_mode = (
+        str(text_subflow.get("mode") or _get(state, "openai_reasoning_mode", "ultra_high")).strip() or "ultra_high"
+    )
     api_effort = _api_reasoning_effort(reasoning_mode)
     card_count = max(3, min(int(_get(state, "card_count", 6) or 6), 8))
-    prompt = _prompt(state, "openai_text_description")
+    prompt = _subflow_prompt(text_subflow, _prompt(state, "openai_text_description"))
     execute_model_calls = bool(_get(state, "execute_model_calls", False))
 
     title_options = [
@@ -244,13 +280,14 @@ def openai_text_node(
         "画面要有清晰层级、少量中文标签、统一色板和 3:4 竖版构图。"
     )
 
-    model_input = _model_input(state, prompt, topic, card_count)
+    model_input = _model_input(state, prompt, topic, card_count, text_subflow)
     request = ModelRequest(
         provider="openai",
         model=model,
         mode=f"reasoning={reasoning_mode}; api_effort={api_effort}",
-        endpoint="https://api.openai.com/v1/responses",
-        prompt_key="openai_text_description",
+        endpoint=str(text_subflow.get("endpoint") or "https://api.openai.com/v1/responses"),
+        skill_key="openai_text_skill",
+        prompt_key="openai_text_skill",
         payload=_build_payload(model, api_effort, model_input, card_count),
         dry_run=not execute_model_calls,
         status="dry_run" if not execute_model_calls else "ready",

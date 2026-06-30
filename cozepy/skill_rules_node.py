@@ -126,23 +126,29 @@ def skill_rules_node(
             output_keys=["image_style_rules", "workflow_steps"],
         ),
         WorkflowStep(
+            node_key="skill_subflows",
+            title="OpenAI/Grok Skill 子流程",
+            model_or_tool="editable subflows",
+            output_keys=["skill_subflows"],
+        ),
+        WorkflowStep(
             node_key="prompt_editor",
             title="在线提示词编辑",
-            model_or_tool="prompt_overrides",
+            model_or_tool="prompt_overrides + skill_flow_overrides",
             output_keys=["editable_prompts"],
         ),
         WorkflowStep(
             node_key="openai_text",
             title="OpenAI GPT5.5 超高推理文案",
             model_or_tool=str(_get(state, "openai_text_model", "gpt-5.5")),
-            prompt_key="openai_text_description",
+            prompt_key="openai_text_skill",
             output_keys=["openai_text_package"],
         ),
         WorkflowStep(
             node_key="grok_image_set",
             title="Grok Expert 3:4 卡通套图",
             model_or_tool=str(_get(state, "grok_image_model", "grok-imagine-image-quality")),
-            prompt_key="grok_expert_image_set",
+            prompt_key="grok_image_skill",
             output_keys=["grok_image_set"],
         ),
         WorkflowStep(
