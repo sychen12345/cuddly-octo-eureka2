@@ -24,14 +24,14 @@ except ImportError:  # pragma: no cover - local fallback
     Context = Any  # type: ignore
 
 try:
-    from graphs.state import (
+    from .state import (
         BenchmarkAccount,
         DemandInsight,
         GreetingNodeInput,
         GreetingNodeOutput,
     )
 except ImportError:
-    from .state import (
+    from graphs.state import (
         BenchmarkAccount,
         DemandInsight,
         GreetingNodeInput,

@@ -21,7 +21,7 @@
   "workflow_steps": [
     {
       "node_key": "greeting",
-      "title": "对标与需求挖掘",
+      "title": "竞品和用户需求分析",
       "model_or_tool": "",
       "prompt_key": "",
       "output_keys": ["research_brief", "benchmark_accounts", "demand_insights"],
@@ -29,7 +29,7 @@
     },
     {
       "node_key": "process",
-      "title": "选题库与高浏览选题",
+      "title": "爆款选题机会池",
       "model_or_tool": "",
       "prompt_key": "",
       "output_keys": ["topic_bank", "selected_topic"],
@@ -37,7 +37,7 @@
     },
     {
       "node_key": "skill_rules",
-      "title": "Skill规则与参考图",
+      "title": "图片制作技能：展开规则",
       "model_or_tool": "",
       "prompt_key": "",
       "output_keys": ["image_style_rules", "workflow_steps"],
@@ -45,7 +45,7 @@
     },
     {
       "node_key": "skill_subflow",
-      "title": "OpenAI/Grok Skill 子流程",
+      "title": "内容生成技能：展开子Agent",
       "model_or_tool": "openai+grok",
       "prompt_key": "",
       "output_keys": ["skill_subflows"],
@@ -53,7 +53,7 @@
     },
     {
       "node_key": "prompt",
-      "title": "在线提示词编辑",
+      "title": "运营确认生成方案",
       "model_or_tool": "",
       "prompt_key": "",
       "output_keys": ["editable_prompts"],
@@ -61,7 +61,7 @@
     },
     {
       "node_key": "openai_text",
-      "title": "OpenAI 文案",
+      "title": "AI生成小红书文案",
       "model_or_tool": "deepseek-v3-2-251201",
       "prompt_key": "openai_text_prompt",
       "output_keys": ["openai_text_package"],
@@ -69,7 +69,7 @@
     },
     {
       "node_key": "grok_image",
-      "title": "Grok 套图",
+      "title": "AI生成小红书套图",
       "model_or_tool": "grok-imagine-image-quality",
       "prompt_key": "grok_image_prompt",
       "output_keys": ["grok_image_set"],
@@ -77,7 +77,7 @@
     },
     {
       "node_key": "finalize",
-      "title": "结果审核打包",
+      "title": "成品审核与复盘建议",
       "model_or_tool": "",
       "prompt_key": "",
       "output_keys": ["card_package", "workflow_summary", "next_commands"],

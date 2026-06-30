@@ -24,7 +24,7 @@ except ImportError:  # pragma: no cover
     Context = Any  # type: ignore
 
 try:
-    from graphs.state import (
+    from .state import (
         OperatorControl,
         OperatorEditPanel,
         SkillSubflow,
@@ -35,7 +35,7 @@ try:
         WorkflowDiagramNode,
     )
 except ImportError:
-    from .state import (
+    from graphs.state import (
         OperatorControl,
         OperatorEditPanel,
         SkillSubflow,

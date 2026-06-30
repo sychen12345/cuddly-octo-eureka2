@@ -24,9 +24,9 @@ except ImportError:  # pragma: no cover - local fallback
     Context = Any  # type: ignore
 
 try:
-    from graphs.state import ProcessNodeInput, ProcessNodeOutput, TopicRecord
-except ImportError:
     from .state import ProcessNodeInput, ProcessNodeOutput, TopicRecord
+except ImportError:
+    from graphs.state import ProcessNodeInput, ProcessNodeOutput, TopicRecord
 
 
 def _get(state: Any, key: str, default: Any = None) -> Any:

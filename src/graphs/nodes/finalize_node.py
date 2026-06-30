@@ -1,16 +1,27 @@
 """
-结果审核打包节点
-整合所有节点输出，将 Grok 生成图片插入到 GPT5.5 文案卡片中，生成选题话题标签
+成品审核与复盘建议节点
+整合 AI 文案和 AI 图片结果，给运营一份可审核、可复盘、可继续改技能的图文卡片包。
 """
-import json
-import os
+from __future__ import annotations
+
 import re
-from typing import List, Dict, Optional, Any, Union
+from typing import List, Dict, Any
 
 from pydantic import BaseModel
-from langchain_core.runnables import RunnableConfig
-from langgraph.runtime import Runtime
-from coze_coding_utils.runtime_ctx.context import Context
+try:
+    from langchain_core.runnables import RunnableConfig
+except ImportError:  # pragma: no cover - local unit-test fallback
+    RunnableConfig = Dict[str, Any]  # type: ignore
+
+try:
+    from langgraph.runtime import Runtime
+except ImportError:  # pragma: no cover - local unit-test fallback
+    Runtime = Any  # type: ignore
+
+try:
+    from coze_coding_utils.runtime_ctx.context import Context
+except ImportError:  # pragma: no cover - local unit-test fallback
+    Context = Any  # type: ignore
 
 from graphs.state import FinalizeNodeInput, FinalizeNodeOutput
 
@@ -24,108 +35,46 @@ def _get_attr(data: Any, key: str, default: Any = None) -> Any:
     return default
 
 
-# 中文停用词（常见无意义词，不适合作为话题标签）
-_STOP_WORDS: set = {
-    "的", "是", "在", "和", "了", "也", "就", "都", "要", "会", "可以", "这个", "那个",
-    "一个", "一种", "一些", "什么", "怎么", "如何", "为什么", "因为", "所以",
-    "如果", "虽然", "但是", "而且", "或者", "然后", "从", "到", "对", "把", "被", "让",
-    "用", "做", "有", "没有", "能", "去", "来", "看", "想", "知道", "觉得",
-    "上", "下", "中", "里", "外", "前", "后", "左", "右", "这", "那", "哪",
-    "我", "你", "他", "她", "它", "我们", "你们", "他们", "自己",
-    "不", "很", "更", "最", "太", "真", "非常", "比较", "特别",
-    "点出", "给出", "说明", "补充", "需要", "使用", "通过", "进行",
-    "基于", "按照", "针对", "关于", "对于", "以及", "及其",
-    "真实", "卡点", "证据", "风险", "边界", "步骤", "角度",
-}
+_HASHTAG_RE = re.compile(r"#[0-9A-Za-z_\-\u4e00-\u9fff]+")
 
 
-def _extract_topic_keywords(selected_topic: Any, niche: str) -> List[str]:
-    """从选题结构化字段中提取话题标签关键词"""
-    keywords: List[str] = []
-
-    # 辅助：从字符串中提取 2-5 字有效短词
-    def extract_from_text(text: str) -> List[str]:
-        result: List[str] = []
-        if not isinstance(text, str) or not text:
-            return result
-        segments = re.split(r'[：:，,。！？、；\s]+', text)
-        for seg in segments:
-            seg = seg.strip()
-            if 2 <= len(seg) <= 5 and seg not in _STOP_WORDS:
-                result.append(seg)
-        return result
-
-    # 1. 赛道关键词（优先级最高）
-    if niche and niche not in _STOP_WORDS:
-        keywords.append(niche)
-
-    # 2. 从需求来源提取（如 "路径不清: 拍照效果, 美甲推荐" → "拍照效果", "美甲推荐"）
-    demand_source = ""
-    if isinstance(selected_topic, BaseModel):
-        demand_source = getattr(selected_topic, "demand_source", "")
-    elif isinstance(selected_topic, dict):
-        demand_source = selected_topic.get("demand_source", "")
-    for kw in extract_from_text(demand_source):
-        if kw not in keywords and len(keywords) < 5:
-            keywords.append(kw)
-
-    # 3. 从受众提取
-    audience = ""
-    if isinstance(selected_topic, BaseModel):
-        audience = getattr(selected_topic, "audience", "")
-    elif isinstance(selected_topic, dict):
-        audience = selected_topic.get("audience", "")
-    for kw in extract_from_text(audience):
-        if kw not in keywords and len(keywords) < 5:
-            keywords.append(kw)
-
-    # 4. 从大纲提取
-    outline: List[str] = []
-    if isinstance(selected_topic, BaseModel):
-        outline = getattr(selected_topic, "outline", [])
-    elif isinstance(selected_topic, dict):
-        outline = selected_topic.get("outline", [])
-    if isinstance(outline, list):
-        for item in outline[:3]:
-            if isinstance(item, str):
-                for kw in extract_from_text(item):
-                    if kw not in keywords and len(keywords) < 6:
-                        keywords.append(kw)
-
-    # 5. 从选题标题提取（兜底）
-    topic_title = ""
-    if isinstance(selected_topic, BaseModel):
-        topic_title = getattr(selected_topic, "title", "")
-    elif isinstance(selected_topic, dict):
-        topic_title = selected_topic.get("title", "")
-    for kw in extract_from_text(topic_title):
-        if kw not in keywords and len(keywords) < 6:
-            keywords.append(kw)
-
-    return keywords[:6]
+def _normalize_hashtag(value: Any) -> str:
+    tag = str(value or "").strip()
+    if not tag:
+        return ""
+    if tag.startswith("#"):
+        return tag
+    compact = re.sub(r"\s+", "", tag)
+    return f"#{compact}" if compact else ""
 
 
-def _generate_hashtags(selected_topic: Any, niche: str) -> List[str]:
-    """生成话题标签，格式如 #芯片 #拍照 #美甲"""
-    keywords = _extract_topic_keywords(selected_topic, niche)
-    hashtags: List[str] = []
+def _topic_hashtags(selected_topic: Any) -> List[str]:
+    """只使用选题节点或运营输入提供的话题标签，不在审核节点猜测主题。"""
     seen: set = set()
+    result: List[str] = []
 
-    for kw in keywords:
-        tag = f"#{kw}"
-        if tag not in seen:
+    raw_tags = _get_attr(selected_topic, "hashtags", [])
+    if not isinstance(raw_tags, list):
+        raw_tags = [raw_tags]
+    for raw in raw_tags:
+        tag = _normalize_hashtag(raw)
+        if tag and tag not in seen:
             seen.add(tag)
-            hashtags.append(tag)
+            result.append(tag)
 
-    # 确保至少有 3 个标签
-    if len(hashtags) < 3:
-        fallbacks = ["#小红书运营", "#内容选题", "#选题库"]
-        for fb in fallbacks:
-            if fb not in seen and len(hashtags) < 5:
-                seen.add(fb)
-                hashtags.append(fb)
+    text_fields = [
+        _get_attr(selected_topic, "title", ""),
+        _get_attr(selected_topic, "demand_source", ""),
+        " ".join(_get_attr(selected_topic, "view_evidence", []) or []),
+    ]
+    for text in text_fields:
+        for match in _HASHTAG_RE.findall(str(text or "")):
+            tag = _normalize_hashtag(match)
+            if tag and tag not in seen:
+                seen.add(tag)
+                result.append(tag)
 
-    return hashtags[:6]
+    return result[:10]
 
 
 def _build_card_package(
@@ -133,7 +82,6 @@ def _build_card_package(
     openai_text_package: Any,
     grok_image_set: Any,
     card_count: int,
-    niche: str
 ) -> Dict[str, Any]:
     """构建最终卡片包，将 Grok 图片 URL 嵌入每张卡片"""
     topic_title = ""
@@ -199,15 +147,12 @@ def _build_card_package(
     post_description = _get_attr(openai_text_package, "post_description", "")
     caption = post_description if post_description else f"关于「{topic_title}」的小红书图文卡片正文。"
 
-    # 智能生成话题标签
-    hashtags = _generate_hashtags(selected_topic, niche)
-
     return {
         "topic_title": topic_title,
         "cover_options": cover_options,
         "cards": cards,
         "caption": caption,
-        "hashtags": hashtags,
+        "hashtags": _topic_hashtags(selected_topic),
         "cta": "想继续做的话，把你的对标标题和评论原话贴进来，我会继续扩成下一组卡片。",
         "review_checklist": [
             "是否所有真实数据都有来源",
@@ -259,64 +204,137 @@ def _build_workflow_steps(workflow_steps_cfg: List[Any]) -> List[Dict[str, Any]]
 
 
 def _build_workflow_diagram() -> Dict[str, Any]:
-    """构建工作流图（19 节点，含意图路由）"""
+    """构建运营可见的工作流树，含可展开技能子树和并行生成分支。"""
     nodes = [
-        # 智能入口
-        {"id": "需求接收", "title": "需求接收", "type": "task", "x": 0, "y": 0},
-        {"id": "Grok意图识别", "title": "Grok意图识别", "type": "agent", "x": 1, "y": 0},
-        # 调研阶段
-        {"id": "竞品调研分析", "title": "竞品调研分析", "type": "agent", "x": 2, "y": 0},
-        {"id": "爆款选题筛选", "title": "爆款选题筛选", "type": "agent", "x": 3, "y": 0},
-        # 视觉规则
-        {"id": "视觉风格设定", "title": "视觉风格设定", "type": "task", "x": 4, "y": 0},
-        {"id": "图片尺寸设定", "title": "图片尺寸设定", "type": "task", "x": 5, "y": 0},
-        {"id": "内容必选项", "title": "内容必选项", "type": "task", "x": 6, "y": 0},
-        {"id": "内容禁选项", "title": "内容禁选项", "type": "task", "x": 7, "y": 0},
-        {"id": "套图一致性规则", "title": "套图一致性规则", "type": "task", "x": 8, "y": 0},
-        {"id": "规则变更判断", "title": "规则变更判断", "type": "agent", "x": 9, "y": 0},
-        {"id": "规则同步保存", "title": "规则同步保存", "type": "task", "x": 9, "y": -1},
-        # 生成步骤
-        {"id": "文案生成步骤", "title": "文案生成步骤", "type": "task", "x": 10, "y": -1},
-        {"id": "图片生成步骤", "title": "图片生成步骤", "type": "task", "x": 10, "y": 1},
-        {"id": "步骤变更判断", "title": "步骤变更判断", "type": "agent", "x": 11, "y": 0},
-        {"id": "步骤同步保存", "title": "步骤同步保存", "type": "task", "x": 11, "y": -1},
-        # 内容生成
-        {"id": "提示词最终确认", "title": "提示词最终确认", "type": "task", "x": 12, "y": 0},
-        {"id": "AI文案生成", "title": "AI文案生成", "type": "task", "x": 13, "y": -1},
-        {"id": "AI图片生成", "title": "AI图片生成", "type": "task", "x": 13, "y": 1},
-        {"id": "内容审核打包", "title": "内容审核打包", "type": "task", "x": 14, "y": 0},
+        {"id": "运营需求入口", "title": "运营需求入口", "type": "start", "x": 0, "y": 0},
+        {"id": "AI理解运营目标", "title": "AI理解运营目标", "type": "agent", "x": 1, "y": 0},
+        {"id": "竞品和用户需求分析", "title": "竞品和用户需求分析", "type": "subtree", "x": 2, "y": -1},
+        {"id": "爆款选题机会池", "title": "爆款选题机会池", "type": "subtree", "x": 3, "y": -1},
+        {"id": "数据分析复盘", "title": "数据分析复盘", "type": "subtree", "x": 3, "y": 1},
+        {"id": "图片制作技能", "title": "图片制作技能", "type": "skill", "x": 4, "y": 0},
+        {"id": "图片制作技能：选风格", "title": "图片制作技能：选风格", "type": "skill_step", "x": 5, "y": -2},
+        {"id": "图片制作技能：定比例", "title": "图片制作技能：定比例", "type": "skill_step", "x": 5, "y": -1},
+        {"id": "图片制作技能：必备元素", "title": "图片制作技能：必备元素", "type": "skill_step", "x": 5, "y": 0},
+        {"id": "图片制作技能：避坑清单", "title": "图片制作技能：避坑清单", "type": "skill_step", "x": 5, "y": 1},
+        {"id": "图片制作技能：套图统一", "title": "图片制作技能：套图统一", "type": "skill_step", "x": 5, "y": 2},
+        {"id": "AI技能教练：检查图片规则", "title": "AI技能教练：检查图片规则", "type": "agent", "x": 6, "y": 0},
+        {"id": "沉淀图片制作经验", "title": "沉淀图片制作经验", "type": "skill_memory", "x": 7, "y": -1},
+        {"id": "内容生成技能", "title": "内容生成技能", "type": "skill", "x": 8, "y": 0},
+        {"id": "文案技能：拆步骤", "title": "文案技能：拆步骤", "type": "sub_agent", "x": 9, "y": -1},
+        {"id": "图片技能：拆步骤", "title": "图片技能：拆步骤", "type": "sub_agent", "x": 9, "y": 1},
+        {"id": "AI技能教练：检查生成流程", "title": "AI技能教练：检查生成流程", "type": "agent", "x": 10, "y": 0},
+        {"id": "沉淀内容生成经验", "title": "沉淀内容生成经验", "type": "skill_memory", "x": 11, "y": -1},
+        {"id": "运营确认生成方案", "title": "运营确认生成方案", "type": "review", "x": 12, "y": 0},
+        {"id": "AI生成小红书文案", "title": "AI生成小红书文案", "type": "content", "x": 13, "y": -1},
+        {"id": "AI生成小红书套图", "title": "AI生成小红书套图", "type": "content", "x": 13, "y": 1},
+        {"id": "成品审核与复盘建议", "title": "成品审核与复盘建议", "type": "end", "x": 14, "y": 0},
     ]
     edges = [
-        # 意图路由
-        {"source": "需求接收", "target": "Grok意图识别", "label": ""},
-        {"source": "Grok意图识别", "target": "竞品调研分析", "label": "竞品调研/爆款选题/完整流程"},
-        {"source": "竞品调研分析", "target": "爆款选题筛选", "label": ""},
-        # 意图分流
-        {"source": "爆款选题筛选", "target": "视觉风格设定", "label": "完整流程→继续"},
-        # 视觉规则
-        {"source": "视觉风格设定", "target": "图片尺寸设定", "label": ""},
-        {"source": "图片尺寸设定", "target": "内容必选项", "label": ""},
-        {"source": "内容必选项", "target": "内容禁选项", "label": ""},
-        {"source": "内容禁选项", "target": "套图一致性规则", "label": ""},
-        {"source": "套图一致性规则", "target": "规则变更判断", "label": ""},
-        # 规则判断分支
-        {"source": "规则变更判断", "target": "规则同步保存", "label": "规则修改→同步"},
-        {"source": "规则变更判断", "target": "文案生成步骤", "label": "内容调整→跳过"},
-        {"source": "规则同步保存", "target": "文案生成步骤", "label": ""},
-        # 生成步骤
-        {"source": "文案生成步骤", "target": "图片生成步骤", "label": ""},
-        {"source": "图片生成步骤", "target": "步骤变更判断", "label": ""},
-        # 步骤判断分支
-        {"source": "步骤变更判断", "target": "步骤同步保存", "label": "规则修改→同步"},
-        {"source": "步骤变更判断", "target": "提示词最终确认", "label": "内容调整→跳过"},
-        {"source": "步骤同步保存", "target": "提示词最终确认", "label": ""},
-        # 内容生成并行
-        {"source": "提示词最终确认", "target": "AI文案生成", "label": ""},
-        {"source": "提示词最终确认", "target": "AI图片生成", "label": ""},
-        {"source": "AI文案生成", "target": "内容审核打包", "label": ""},
-        {"source": "AI图片生成", "target": "内容审核打包", "label": ""},
+        {"source": "运营需求入口", "target": "AI理解运营目标", "label": ""},
+        {"source": "AI理解运营目标", "target": "竞品和用户需求分析", "label": "展开调研子树"},
+        {"source": "竞品和用户需求分析", "target": "爆款选题机会池", "label": "提炼选题机会"},
+        {"source": "爆款选题机会池", "target": "数据分析复盘", "label": "只做复盘时到这里"},
+        {"source": "爆款选题机会池", "target": "图片制作技能", "label": "进入完整生产"},
+        {"source": "图片制作技能", "target": "图片制作技能：选风格", "label": "展开图片技能"},
+        {"source": "图片制作技能：选风格", "target": "图片制作技能：定比例", "label": ""},
+        {"source": "图片制作技能：定比例", "target": "图片制作技能：必备元素", "label": ""},
+        {"source": "图片制作技能：必备元素", "target": "图片制作技能：避坑清单", "label": ""},
+        {"source": "图片制作技能：避坑清单", "target": "图片制作技能：套图统一", "label": ""},
+        {"source": "图片制作技能：套图统一", "target": "AI技能教练：检查图片规则", "label": "交给AI分析"},
+        {"source": "AI技能教练：检查图片规则", "target": "沉淀图片制作经验", "label": "值得长期保留"},
+        {"source": "AI技能教练：检查图片规则", "target": "内容生成技能", "label": "本次临时使用"},
+        {"source": "沉淀图片制作经验", "target": "内容生成技能", "label": ""},
+        {"source": "内容生成技能", "target": "文案技能：拆步骤", "label": "展开文案子Agent"},
+        {"source": "内容生成技能", "target": "图片技能：拆步骤", "label": "展开图片子Agent"},
+        {"source": "文案技能：拆步骤", "target": "AI技能教练：检查生成流程", "label": ""},
+        {"source": "图片技能：拆步骤", "target": "AI技能教练：检查生成流程", "label": ""},
+        {"source": "AI技能教练：检查生成流程", "target": "沉淀内容生成经验", "label": "值得长期保留"},
+        {"source": "AI技能教练：检查生成流程", "target": "运营确认生成方案", "label": "本次临时使用"},
+        {"source": "沉淀内容生成经验", "target": "运营确认生成方案", "label": ""},
+        {"source": "运营确认生成方案", "target": "AI生成小红书文案", "label": "并行生成"},
+        {"source": "运营确认生成方案", "target": "AI生成小红书套图", "label": "并行生成"},
+        {"source": "AI生成小红书文案", "target": "成品审核与复盘建议", "label": ""},
+        {"source": "AI生成小红书套图", "target": "成品审核与复盘建议", "label": ""},
     ]
     return {"nodes": nodes, "edges": edges}
+
+
+def _build_operator_control(state: FinalizeNodeInput) -> Dict[str, Any]:
+    """构建运营编辑面板，把技能当作可拖拽、可交给 AI 分析的业务流程。"""
+    topic_title = ""
+    if isinstance(state.selected_topic, BaseModel):
+        topic_title = getattr(state.selected_topic, "title", "")
+    elif isinstance(state.selected_topic, dict):
+        topic_title = state.selected_topic.get("title", "")
+
+    return {
+        "edit_panels": [
+            {
+                "key": "research_tree",
+                "title": "竞品调研与爆款选题",
+                "panel_type": "business_tree",
+                "editable": True,
+                "content": {
+                    "goal": "整理对标账号、评论需求和高潜选题，帮助运营决定今天先做哪一篇。",
+                    "current_topic": topic_title,
+                    "operator_can_do": ["补充对标链接", "补充评论原话", "让AI重新评估选题优先级"],
+                },
+            },
+            {
+                "key": "image_skill_tree",
+                "title": "图片制作技能",
+                "panel_type": "skill_tree",
+                "editable": True,
+                "content": {
+                    "goal": "把画面风格、比例、必须出现和必须避开的元素做成可复用图片技能。",
+                    "sub_agent": "AI技能教练",
+                    "operator_can_do": ["拖动方框调整顺序", "增删画面要求", "把本次好用的要求保存为长期经验"],
+                },
+            },
+            {
+                "key": "copy_skill_tree",
+                "title": "文案生成技能",
+                "panel_type": "skill_tree",
+                "editable": True,
+                "content": {
+                    "goal": "把选题理解、标题、正文、每页脚本拆成可展开的文案子Agent。",
+                    "sub_agent": "文案子Agent",
+                    "operator_can_do": ["改写语气", "调整卡片密度", "让AI检查是否适合小红书发布"],
+                },
+            },
+            {
+                "key": "image_generation_skill_tree",
+                "title": "套图生成技能",
+                "panel_type": "skill_tree",
+                "editable": True,
+                "content": {
+                    "goal": "把每页脚本转成统一套图，让图片子Agent生成可审核的画面方案。",
+                    "sub_agent": "图片子Agent",
+                    "operator_can_do": ["调整每页画面动作", "锁定统一角色和配色", "让AI分析套图是否一致"],
+                },
+            },
+            {
+                "key": "review_tree",
+                "title": "成品审核与数据复盘",
+                "panel_type": "review",
+                "editable": True,
+                "content": {
+                    "goal": "检查内容风险、标题吸引力、卡片可读性，并把复盘结论反向喂给技能。",
+                    "operator_can_do": ["标记低分卡片", "记录发布数据", "让AI给出下一轮改进建议"],
+                },
+            },
+        ],
+        "actions": [
+            "展开技能流程",
+            "让AI分析这个技能",
+            "拖动方框调整顺序",
+            "让AI检查改动",
+            "保存为我的运营技能",
+            "重新生成内容",
+            "查看复盘建议",
+        ],
+        "status": "ready",
+    }
 
 
 def finalize_node(
@@ -325,8 +343,8 @@ def finalize_node(
     runtime: Runtime[Context]
 ) -> FinalizeNodeOutput:
     """
-    title: 结果审核打包
-    desc: 整合所有节点输出，将 Grok 生成的图片 URL 嵌入到 GPT5.5 文案卡片中，并智能生成选题话题标签（如 #芯片 #拍照 #美甲）
+    title: 成品审核与复盘建议
+    desc: 整合 AI 文案和 AI 图片，生成运营可审核的卡片包、话题标签和下一轮复盘建议
     integrations:
     """
     ctx = runtime.context
@@ -336,8 +354,7 @@ def finalize_node(
         state.selected_topic,
         state.openai_text_package,
         state.grok_image_set,
-        state.card_count,
-        state.niche
+        state.card_count
     )
 
     # 2. 构建工作流摘要
@@ -370,12 +387,8 @@ def finalize_node(
         "把当前卡片包改成更强封面标题和更短页面正文。"
     ]
 
-    # 6. 构建运算器控制
-    operator_control = {
-        "edit_panels": [],
-        "actions": ["edit_prompt", "toggle_step", "rerun", "reorder_step", "sync_config"],
-        "status": "ready"
-    }
+    # 6. 构建运营控制面板
+    operator_control = _build_operator_control(state)
 
     return FinalizeNodeOutput(
         card_package=card_package,

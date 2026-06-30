@@ -1,16 +1,15 @@
 """
-小红书内容全栈工作流 — 全局状态 & 图/节点 IO 定义
+小红书内容运营工作流 — 全局状态 & 图/节点 IO 定义
 ──────────────────────────────────────────────────────
-节点: 对标与需求挖掘 → 选题库 → 风格选择 → 尺寸选择 → 必选项 → 禁选项 → 一致性规则 → 规则同步
-      ─┬─ OpenAI步骤配置  (并行)
-       └─ Grok步骤配置   (并行)
-      → 子流程同步 → 提示词编辑
-      ─┬─ OpenAI 文案  (并行)
-       └─ Grok 套图   (并行)
-      → 结果审核打包
+节点: 运营需求入口 → 竞品和用户需求分析 → 爆款选题机会池
+      → 图片制作技能子树 → AI技能教练 → 内容生成技能子树
+      → 运营确认生成方案
+      ─┬─ AI生成小红书文案  (并行)
+       └─ AI生成小红书套图  (并行)
+      → 成品审核与复盘建议
 """
 from typing import Any, Dict, List, Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 # ═══════════════════════════════════════════════════════════
@@ -38,6 +37,7 @@ class TopicRecord(BaseModel):
     audience: str = Field(default="", description="目标人群")
     hook: str = Field(default="", description="开头钩子")
     demand_source: str = Field(default="", description="需求来源")
+    hashtags: List[str] = Field(default_factory=list, description="选题对应的话题标签")
     outline: List[str] = Field(default_factory=list, description="大纲")
     proof_needed: List[str] = Field(default_factory=list, description="需补充证据")
     differentiation: str = Field(default="", description="差异化说明")
@@ -185,13 +185,14 @@ class GlobalState(BaseModel):
     constraints: List[str] = Field(default_factory=list, description="约束")
     brand_voice: str = Field(default="", description="品牌语气")
     card_count: int = Field(default=6, description="卡片数量")
-    openai_api_key: str = Field(default="", description="OpenAI API Key（可选）")
-    grok_api_key: str = Field(default="", description="Grok API Key（可选）")
+    openai_api_key: str = Field(default="", repr=False, description="OpenAI API Key（真实运行时必须由用户输入）")
+    grok_api_key: str = Field(default="", repr=False, description="Grok API Key（真实运行时必须由用户输入）")
     deepseek_api_key: str = Field(default="", description="DeepSeek API Key（可选，不填则用平台默认）")
     execute_model_calls: bool = Field(default=False, description="是否真实调用模型")
     # 灵活入口参数
     user_request: str = Field(default="", description="运营的自然语言需求描述")
     xiaohongshu_url: str = Field(default="", description="小红书链接（可选）")
+    user_selected_topic: str = Field(default="", description="运营指定选题（可选，例如直接填写一个话题标签或选题标题）")
     intent: str = Field(default="完整流程", description="AI识别出的运营意图")
     intent_reason: str = Field(default="", description="意图识别理由")
     # 运营覆盖参数（画布上修改后传入）
@@ -237,9 +238,9 @@ class GlobalState(BaseModel):
     subflows_judge_decision: str = Field(default="skip", description="子流程智能判断结果：sync 或 skip")
     rules_judge_reason: str = Field(default="", description="规则判断理由")
     subflows_judge_reason: str = Field(default="", description="子流程判断理由")
-    # 配置回写标记
-    synced_skill_rules_cfg: Dict[str, Any] = Field(default_factory=dict, description="回写的 skill_rules 配置")
-    synced_skill_subflows_cfg: List[Dict[str, Any]] = Field(default_factory=list, description="回写的 skill_subflows 配置")
+    # 技能经验沉淀标记
+    synced_skill_rules_cfg: Dict[str, Any] = Field(default_factory=dict, description="已沉淀的图片制作技能数据")
+    synced_skill_subflows_cfg: List[Dict[str, Any]] = Field(default_factory=list, description="已沉淀的内容生成技能数据")
 
 
 # ═══════════════════════════════════════════════════════════
@@ -293,7 +294,7 @@ class IntentAnalysisOutput(BaseModel):
     audience: str = Field(default="", description="从需求中提取或确认的目标人群")
 
 class IntentPath(BaseModel):
-    """意图路由的条件分支输入"""
+    """AI理解运营目标后的条件分支输入"""
     intent: str = Field(..., description="识别出的运营意图")
 
 
@@ -306,6 +307,7 @@ class GraphInput(BaseModel):
     # 灵活入口：运营可以说一段话，也可以贴链接
     user_request: str = Field(default="", description="运营的自然语言需求（如：帮我分析这个竞品的数据）")
     xiaohongshu_url: str = Field(default="", description="小红书链接（可选，用于竞品分析或文案参考）")
+    user_selected_topic: str = Field(default="", description="运营指定选题（可选，可填写话题标签或完整标题）")
     niche: str = Field(default="", description="赛道/领域（可选，不填则由AI从需求中提取）")
     audience: str = Field(default="", description="目标人群（可选）")
     goal: str = Field(default="生成一组小红书图文卡片", description="目标")
@@ -314,10 +316,24 @@ class GraphInput(BaseModel):
     constraints: List[str] = Field(default_factory=list, description="约束")
     brand_voice: str = Field(default="", description="品牌语气")
     card_count: int = Field(default=6, description="卡片数量")
-    openai_api_key: str = Field(default="", description="OpenAI API Key（可选）")
-    grok_api_key: str = Field(default="", description="Grok API Key（可选）")
+    openai_api_key: str = Field(..., repr=False, description="OpenAI API Key（运行工作流前必须由用户输入）")
+    grok_api_key: str = Field(..., repr=False, description="Grok API Key（运行工作流前必须由用户输入）")
     deepseek_api_key: str = Field(default="", description="DeepSeek API Key（可选）")
     execute_model_calls: bool = Field(default=False, description="是否真实调用模型")
+    image_style_override: Optional[Dict[str, Any]] = Field(default=None, description="运营在画布上修改后的图片制作技能")
+    workflow_steps_override: Optional[List[Dict[str, Any]]] = Field(default=None, description="运营拖动方框后的主流程步骤")
+    skill_subflows_override: Optional[List[Dict[str, Any]]] = Field(default=None, description="运营修改后的文案/图片子Agent技能流程")
+
+    @model_validator(mode="after")
+    def require_runtime_api_keys(self) -> "GraphInput":
+        missing: List[str] = []
+        if not self.openai_api_key:
+            missing.append("OpenAI API Key")
+        if not self.grok_api_key:
+            missing.append("Grok API Key")
+        if missing:
+            raise ValueError(f"真实运行工作流前必须输入：{', '.join(missing)}。")
+        return self
 
 class GraphOutput(BaseModel):
     """工作流的输出结果"""
@@ -341,8 +357,8 @@ class GraphOutput(BaseModel):
     rules_judge_reason: str = Field(default="", description="规则判断理由")
     subflows_judge_decision: str = Field(default="skip", description="子流程智能判断结果")
     subflows_judge_reason: str = Field(default="", description="子流程判断理由")
-    synced_skill_rules_cfg: Dict[str, Any] = Field(default_factory=dict, description="回写的 skill_rules 配置")
-    synced_skill_subflows_cfg: List[Dict[str, Any]] = Field(default_factory=list, description="回写的 skill_subflows 配置")
+    synced_skill_rules_cfg: Dict[str, Any] = Field(default_factory=dict, description="已沉淀的图片制作技能数据")
+    synced_skill_subflows_cfg: List[Dict[str, Any]] = Field(default_factory=list, description="已沉淀的内容生成技能数据")
 
 
 # ═══════════════════════════════════════════════════════════
@@ -373,10 +389,17 @@ class ProcessNodeInput(BaseModel):
     niche: str = Field(..., description="赛道/领域")
     audience: str = Field(..., description="目标人群")
     brand_voice: str = Field(default="", description="品牌语气")
+    user_request: str = Field(default="", description="运营的自然语言需求")
+    xiaohongshu_url: str = Field(default="", description="竞品小红书链接")
+    user_selected_topic: str = Field(default="", description="运营指定选题")
+    benchmark_notes: List[str] = Field(default_factory=list, description="对标笔记信号")
+    constraints: List[str] = Field(default_factory=list, description="约束")
     research_brief: str = Field(default="", description="研究简报")
     benchmark_accounts: List[BenchmarkAccount] = Field(default_factory=list, description="对标账号列表")
     demand_insights: List[DemandInsight] = Field(default_factory=list, description="需求洞察列表")
     card_count: int = Field(default=6, description="卡片数量")
+    openai_api_key: str = Field(default="", description="OpenAI API Key")
+    execute_model_calls: bool = Field(default=False, description="是否真实调用模型")
 
 class ProcessNodeOutput(BaseModel):
     topic_bank: List[TopicRecord] = Field(..., description="选题库")

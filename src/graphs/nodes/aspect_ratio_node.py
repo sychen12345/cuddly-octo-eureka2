@@ -1,6 +1,6 @@
 """
-Skill规则子工作流 — 尺寸选择节点
-从配置文件读取画面比例，运营可在画布上切换 3:4/1:1/16:9 等
+图片制作技能 — 比例选择节点
+为当前小红书套图选择画面比例，运营可以在画布上切换 3:4/1:1/16:9 等。
 """
 import os
 import json
@@ -27,8 +27,8 @@ def aspect_ratio_node(
     runtime: Runtime[Context]
 ) -> AspectRatioNodeOutput:
     """
-    title: 尺寸选择
-    desc: 从配置读取画面比例（3:4/1:1/16:9等），运营可在画布上切换
+    title: 图片制作技能：定比例
+    desc: 选择小红书图片比例，例如 3:4、1:1 或 16:9
     integrations:
     """
     ctx = runtime.context

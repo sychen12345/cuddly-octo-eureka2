@@ -23,9 +23,9 @@ except ImportError:  # pragma: no cover
     Context = Any  # type: ignore
 
 try:
-    from graphs.state import CardPackage, CardPage, FinalizeNodeInput, FinalizeNodeOutput
-except ImportError:
     from .state import CardPackage, CardPage, FinalizeNodeInput, FinalizeNodeOutput
+except ImportError:
+    from graphs.state import CardPackage, CardPage, FinalizeNodeInput, FinalizeNodeOutput
 
 
 def _get(state: Any, key: str, default: Any = None) -> Any:

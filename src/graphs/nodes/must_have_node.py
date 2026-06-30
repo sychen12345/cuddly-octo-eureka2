@@ -1,6 +1,6 @@
 """
-Skill规则子工作流 — 必选项配置节点
-从配置文件读取必选项列表（支持 Jinja2 模板），运营可在画布上增删标签
+图片制作技能 — 必备元素节点
+运营在这里维护每张图必须保留的画面元素和信息。
 """
 import os
 import json
@@ -44,8 +44,8 @@ def must_have_node(
     runtime: Runtime[Context]
 ) -> MustHaveNodeOutput:
     """
-    title: 必选项配置
-    desc: 从配置读取必须包含的元素列表（模板变量从选题动态注入），运营可在画布上增删标签
+    title: 图片制作技能：必备元素
+    desc: 确认每张图必须出现的元素，运营可在画布上增删标签
     integrations:
     """
     ctx = runtime.context

@@ -19,7 +19,7 @@ except ImportError:  # pragma: no cover
     Context = Any  # type: ignore
 
 try:
-    from graphs.state import (
+    from .state import (
         GrokImageNodeInput,
         GrokImageNodeOutput,
         ImageGenerationItem,
@@ -27,7 +27,7 @@ try:
         ModelRequest,
     )
 except ImportError:
-    from .state import (
+    from graphs.state import (
         GrokImageNodeInput,
         GrokImageNodeOutput,
         ImageGenerationItem,
@@ -36,9 +36,9 @@ except ImportError:
     )
 
 try:
-    from graphs.nodes.http_utils import ModelCallError, post_json, redact_secrets
-except ImportError:
     from .http_utils import ModelCallError, post_json, redact_secrets
+except ImportError:
+    from graphs.nodes.http_utils import ModelCallError, post_json, redact_secrets
 
 
 def _get(state: Any, key: str, default: Any = None) -> Any:

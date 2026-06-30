@@ -2,17 +2,17 @@
   "subflows": [
     {
       "skill_key": "openai_text_skill",
-      "title": "OpenAI 文案子流程",
+      "title": "文案生成技能流程",
       "provider": "openai",
       "model": "deepseek-v3-2-251201",
       "mode": "ultra_high",
       "endpoint": "https://api.openai.com/v1/chat/completions",
-      "description": "生成小红书图文卡片文案：标题、正文、每页脚本、视觉说明",
+      "description": "把选题、用户痛点和账号语气转成可发布的小红书图文文案",
       "editable": true,
       "steps": [
         {
           "step_key": "openai_analyze",
-          "title": "分析选题与需求",
+          "title": "理解选题和用户痛点",
           "node_type": "model",
           "model_or_tool": "deepseek-v3-2-251201",
           "prompt_key": "openai_text_prompt",
@@ -20,13 +20,13 @@
           "output_keys": ["title_options", "card_script", "image_brief"],
           "editable": true,
           "enabled": true,
-          "notes": "可修改提示词来调整文案风格",
+          "notes": "运营可用一句话告诉 AI 想要的表达口吻和信息重点",
           "default_prompt": "你是小红书内容创作专家，擅长按「{{brand_voice}}」语气写作。\n领域：{{niche}}\n目标人群：{{audience}}\n选题：{{selected_topic_title}}\n请生成图文卡片的标题选项、正文、每页脚本和视觉说明。",
           "final_prompt": "你是小红书内容创作专家，擅长按「{{brand_voice}}」语气写作。\n领域：{{niche}}\n目标人群：{{audience}}\n选题：{{selected_topic_title}}\n请生成图文卡片的标题选项、正文、每页脚本和视觉说明。"
         },
         {
           "step_key": "openai_generate",
-          "title": "生成正文与卡片脚本",
+          "title": "生成可发布的图文文案",
           "node_type": "prompt",
           "model_or_tool": "deepseek-v3-2-251201",
           "prompt_key": "openai_generate_prompt",
@@ -34,7 +34,7 @@
           "output_keys": ["post_description", "card_script"],
           "editable": true,
           "enabled": true,
-          "notes": "可调整每页卡片的内容密度",
+          "notes": "运营可调整每页卡片的信息密度和行动引导",
           "default_prompt": "根据分析结果，按「{{brand_voice}}」语气生成{{audience}}的图文卡片正文和每页脚本。",
           "final_prompt": "根据分析结果，按「{{brand_voice}}」语气生成{{audience}}的图文卡片正文和每页脚本。"
         }
@@ -42,17 +42,17 @@
     },
     {
       "skill_key": "grok_image_skill",
-      "title": "Grok 套图子流程",
+      "title": "图片制作技能流程",
       "provider": "grok",
       "model": "grok-imagine-image-quality",
       "mode": "Expert",
       "endpoint": "https://api.x.ai/v1/images/generations",
-      "description": "生成 {{aspect_ratio}} {{style}} 风格的小红书图文套图",
+      "description": "把文案脚本转成 {{aspect_ratio}} {{style}} 风格的小红书套图",
       "editable": true,
       "steps": [
         {
           "step_key": "grok_plan",
-          "title": "规划套图视觉方向",
+          "title": "确定套图画面方向",
           "node_type": "rule",
           "model_or_tool": "grok-imagine-image-quality",
           "prompt_key": "grok_plan_prompt",
@@ -60,13 +60,13 @@
           "output_keys": ["grok_image_plan"],
           "editable": true,
           "enabled": true,
-          "notes": "可修改视觉方向",
+          "notes": "运营可描述想要的角色、色板、构图和信息层级",
           "default_prompt": "为选题「{{selected_topic_title}}」规划 {{aspect_ratio}} {{style}} 风格套图。",
           "final_prompt": "为选题「{{selected_topic_title}}」规划 {{aspect_ratio}} {{style}} 风格套图。"
         },
         {
           "step_key": "grok_generate",
-          "title": "生成套图",
+          "title": "生成每页图片",
           "node_type": "model",
           "model_or_tool": "grok-imagine-image-quality",
           "prompt_key": "grok_image_prompt",
@@ -74,7 +74,7 @@
           "output_keys": ["grok_image_set"],
           "editable": true,
           "enabled": true,
-          "notes": "可修改生图提示词",
+          "notes": "运营可调整每页画面动作、标题区域和统一感",
           "default_prompt": "生成小红书 {{aspect_ratio}} {{style}}风格图文卡片套图。\n选题：{{selected_topic_title}}\n风格：{{style}}、短句、层级清楚、留白充足。\n每页一个核心信息，配色统一。",
           "final_prompt": "生成小红书 {{aspect_ratio}} {{style}}风格图文卡片套图。\n选题：{{selected_topic_title}}\n风格：{{style}}、短句、层级清楚、留白充足。\n每页一个核心信息，配色统一。"
         }

@@ -1,4 +1,4 @@
-"""节点 7/8 — Grok Expert 套图 (grok_image)"""
+"""AI生成小红书套图节点"""
 
 import json, os
 from typing import Any, Dict, List, Optional
@@ -70,8 +70,8 @@ def grok_image_node(
     runtime: Runtime[Context],
 ) -> GrokImageNodeOutput:
     """
-    title: Grok Expert 套图
-    desc: 调用 Grok API 生成小红书图文卡片套图（支持 dry_run 和真实调用）
+    title: AI生成小红书套图
+    desc: 根据运营确认的图片技能生成小红书图文卡片套图
     integrations: Grok
     """
     ctx = runtime.context

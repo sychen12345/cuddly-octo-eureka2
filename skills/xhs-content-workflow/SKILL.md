@@ -15,9 +15,10 @@ If the user gives only a short instruction, proceed with explicit assumptions an
 领域/产品:
 目标人群:
 已知对标:
+竞品链接:
 评论/私信原话:
 高浏览证据:
-用户指定选题:
+运营指定选题或话题标签:
 参考图规则:
 限制:
 账号语气:
@@ -25,7 +26,7 @@ If the user gives only a short instruction, proceed with explicit assumptions an
 
 When the user wants current market evidence, search the web or the target platform if tools and permissions allow it. If live data is unavailable, clearly mark the result as a research framework or hypothesis and provide a sampling checklist.
 
-For the bundled Coze-style Python workflow, require runtime `grok_api_key` and `openai_api_key` inputs before any node runs. Never echo, log, or include those API keys in final outputs. Prefer operator-friendly fields such as `openai_text_skill_prompt`, `grok_image_skill_prompt`, `grok_visual_rules_prompt`, `image_aspect_ratio`, `image_style`, `openai_review_enabled`, and `grok_review_enabled` for visual workflow editing. Treat `prompt_overrides` and `skill_flow_overrides` as advanced editors. Keep `execute_model_calls=false` for dry-run request plans; set it to `true` only when the workflow should directly call OpenAI Responses API and xAI/Grok image generation with the runtime keys.
+For the bundled Coze-style Python workflow, require runtime `grok_api_key` and `openai_api_key` inputs before any node runs. Never echo, log, or include those API keys in final outputs. Use `user_selected_topic` when operations specifies a topic or hashtag; that topic wins over automatic selection. When `xiaohongshu_url` is present and real execution is enabled, use OpenAI Responses API with web search to research the competitor link before building the topic bank. Prefer operator-friendly fields such as `image_style_override`, `workflow_steps_override`, and `skill_subflows_override` for visual workflow editing. Treat JSON overrides as advanced editors. Keep `execute_model_calls=false` for dry-run request plans; set it to `true` only when the workflow should directly call OpenAI and xAI/Grok with the runtime keys.
 
 ## Workflow
 
@@ -44,13 +45,14 @@ For the bundled Coze-style Python workflow, require runtime `grok_api_key` and `
    - Separate explicit needs from inferred needs.
 
 4. Select the high-view topic.
-   - Convert demand clusters into topic records.
+   - If `xiaohongshu_url` is provided and model calls are enabled, use OpenAI web search to inspect current public competitor signals before generating topic records.
+   - Convert demand clusters and competitor signals into topic records.
    - Score each topic by demand clarity, content fit, proof availability, differentiation, conversion potential, and evidence such as views, saves, comments, search terms, or hot-word notes.
    - Use `user_selected_topic` when present, while still carrying evidence and risk notes.
    - Include source traces from benchmark notes or comments so future users can audit why the topic exists.
 
 5. Build editable OpenAI/Grok skill subflows.
-   - Expose `openai_text_skill` and `grok_image_skill` as visual subflows with editable steps.
+   - Expose the text skill and image skill as visual subAgent flows with editable steps.
    - Output `workflow_diagram_nodes` and `workflow_diagram_edges` so the low-code UI can render the main workflow, child flowcharts, parallel branches, and join points.
    - Output `operator_edit_panels` so operators can use text areas, selects, and toggles instead of JSON.
    - Apply `skill_flow_overrides` to step prompts, models, modes, titles, and enabled flags.
@@ -78,6 +80,7 @@ For the bundled Coze-style Python workflow, require runtime `grok_api_key` and `
 9. Generate the card package.
    - Pick the strongest topic unless the user chooses one.
    - Produce cover headline options, page-by-page card copy, Grok image prompts, caption, hashtags, CTA, and review checklist.
+   - Do not invent fallback hashtags in the final review node. Hashtags must come from `user_selected_topic`, explicit `#...` text, or OpenAI's topic-bank result.
    - Keep cards scannable: one idea per page, concrete examples, minimal jargon, and no unsupported outcome claims.
 
 For durable outputs or Coze workflow integration, read `references/output-schema.md`.

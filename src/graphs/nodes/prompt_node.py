@@ -1,4 +1,4 @@
-"""节点 5/8 — 在线提示词编辑 (prompt)"""
+"""运营确认生成方案节点"""
 
 from typing import List, Optional
 
@@ -23,10 +23,10 @@ def _build_prompts(
     topic_title = selected_topic.title if selected_topic else niche
     prompts: List[EditablePrompt] = []
 
-    # OpenAI 文案提示词
+    # 文案生成方向
     prompts.append(EditablePrompt(
         key="openai_text_prompt",
-        title="OpenAI 文案提示词",
+        title="文案生成方向",
         target_model="gpt-5.5",
         default_prompt=(
             f"你是小红书内容创作专家，擅长按「{brand_voice}」语气写作。\n"
@@ -45,10 +45,10 @@ def _build_prompts(
         editable=True,
     ))
 
-    # Grok 生图提示词
+    # 套图生成方向
     prompts.append(EditablePrompt(
         key="grok_image_prompt",
-        title="Grok 生图提示词",
+        title="套图生成方向",
         target_model="grok-imagine-image-quality",
         default_prompt=(
             f"生成小红书 3:4 卡通风格图文卡片套图。\n"
@@ -87,8 +87,8 @@ def prompt_node(
     runtime: Runtime[Context],
 ) -> PromptNodeOutput:
     """
-    title: 在线提示词编辑
-    desc: 为每个子流程步骤生成可编辑的提示词，支持用户在线修改
+    title: 运营确认生成方案
+    desc: 运营确认文案方向、套图方向和每个技能步骤后，再进入并行生成
     integrations:
     """
     ctx = runtime.context

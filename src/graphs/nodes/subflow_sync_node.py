@@ -1,6 +1,6 @@
 """
-Skill子流程子工作流 — 子流程同步节点
-将 OpenAI 和 Grok 子流程合并，写回 skill_subflows.json 配置文件
+内容生成技能 — 经验沉淀节点
+把运营确认的文案和图片生成步骤保存为长期技能，供下次内容生产复用。
 """
 import os
 import json
@@ -70,8 +70,8 @@ def subflow_sync_node(
     runtime: Runtime[Context]
 ) -> SubflowSyncNodeOutput:
     """
-    title: 子流程同步回写
-    desc: 合并 OpenAI 和 Grok 子流程定义，写回 skill_subflows.json 配置文件
+    title: 沉淀内容生成经验
+    desc: 把运营确认的文案和图片生成步骤沉淀为长期技能
     integrations:
     """
     ctx = runtime.context
@@ -95,7 +95,7 @@ def subflow_sync_node(
     for p in state.grok_prompts:
         editable_prompts.append(p)
 
-    # 4. 仅在智能判断结果为"规则修改"时写回配置文件
+    # 4. 仅在 AI 技能教练建议长期保留时保存
     if state.subflows_judge_decision == "sync":
         synced_cfg: List[Dict[str, Any]] = [_to_dict(sf) for sf in all_subflows_raw]
         _sync_back_config({"subflows": synced_cfg})

@@ -1,12 +1,12 @@
 {
-    "config": {
-        "model": "deepseek-v3-2-251201",
-        "temperature": 0.0,
-        "top_p": 0.7,
-        "max_completion_tokens": 512,
-        "thinking": "disabled"
-    },
-    "tools": [],
-    "sp": "# 角色定义\n你是小红书内容工作流的子流程变更判断专家，擅长区分「内容调整」和「流程/规则修改」。\n\n# 任务目标\n根据运营对 Skill 子流程节点的修改，判断这次修改是属于「内容调整」还是「流程修改」。只有流程修改才需要同步回写 skill 配置文件。\n\n# 工作流上下文\n- **Input**：各子流程的定义和变更标记\n- **Process**：\n  1. 检查哪些子流程被标记为 changed\n  2. 分析变更的性质：\n     - **内容调整**：修改了提示词中的领域名称、目标人群、选题等具体内容（不需要改流程配置）\n     - **流程修改**：修改了步骤数量、步骤顺序、步骤启用/禁用、模型选择、端点地址等结构性配置（需要同步配置）\n  3. 如果只有内容调整类变更，返回 skip；如果有任何流程修改类变更，返回 sync\n- **Output**：判断结果和理由\n\n# 约束与规则\n- 步骤新增/删除/重排序 → 流程修改(sync)\n- 步骤启用/禁用切换 → 流程修改(sync)\n- 模型/端点变更 → 流程修改(sync)\n- 仅修改提示词中的领域/人群等占位内容 → 内容调整(skip)\n- 如果没有任何 changed 标记为 true → skip\n- 只返回 JSON，不要额外解释\n\n# 输出格式\n仅返回如下格式的 JSON：\n{\n  \"decision\": \"sync\" | \"skip\",\n  \"reason\": \"判断理由\"\n}",
-    "up": "请判断以下子流程变更是否需要同步回写 skill 配置文件：\n\nOpenAI子流程: {{ openai_subflow }}，步骤是否变更: {{ openai_steps_changed }}\nGrok子流程: {{ grok_subflow }}，步骤是否变更: {{ grok_steps_changed }}\n\n请判断并返回 JSON。"
+  "config": {
+    "model": "deepseek-v3-2-251201",
+    "temperature": 0.0,
+    "top_p": 0.7,
+    "max_completion_tokens": 512,
+    "thinking": "disabled"
+  },
+  "tools": [],
+  "sp": "# 角色定义\n你是小红书运营团队的 AI 技能教练，擅长判断文案/图片子Agent流程里的改动是否值得长期保留。\n\n# 任务目标\n根据运营对文案技能和图片技能的修改，判断这次改动是「本次临时内容调整」还是「值得沉淀为长期生成经验」。\n\n# 判断原则\n- 只改了当次选题、领域、人群或语气示例：返回 skip。\n- 改了步骤数量、步骤顺序、启用/停用某一步、模型选择、长期提示词结构：返回 sync。\n- 没有 changed 标记：返回 skip。\n- 只返回 JSON，不要额外解释。\n\n# 输出格式\n{\n  \"decision\": \"sync\" | \"skip\",\n  \"reason\": \"判断理由，写给运营看\"\n}",
+  "up": "请阅读以下文案/图片技能改动，判断它是本次临时使用，还是值得沉淀为长期生成技能。\n\n赛道：{{ niche }}\n目标人群：{{ audience }}\n改动列表：{{ changed_items }}\n\n请只返回 JSON。"
 }

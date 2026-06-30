@@ -16,8 +16,8 @@ def grok_rules_judge_node(
     runtime: Runtime[Context]
 ) -> GrokRulesJudgeOutput:
     """
-    title: 规则变更智能判断
-    desc: 使用大模型智能判断运营修改是"内容调整"还是"规则修改"，仅规则修改才同步回skill配置
+    title: AI技能教练：检查图片规则
+    desc: AI阅读图片制作技能，判断运营改动是本次临时用，还是值得沉淀为长期图片经验
     integrations: 大语言模型
     """
     ctx = runtime.context
@@ -38,7 +38,7 @@ def grok_rules_judge_node(
     if not changed_items:
         return GrokRulesJudgeOutput(
             rules_judge_decision="skip",
-            rules_judge_reason="无规则变更，无需同步"
+            rules_judge_reason="没有发现需要沉淀的图片制作改动"
         )
 
     # 渲染用户提示词
@@ -89,10 +89,10 @@ def grok_rules_judge_node(
         elif '"skip"' in resp_lower or "'skip'" in resp_lower:
             decision = "skip"
         else:
-            # 默认：有变更项就同步
+            # 默认：有变更项就沉淀
             if changed_items:
                 decision = "sync"
-                reason = "检测到规则变更，默认同步"
+                reason = "检测到图片制作经验变化，默认建议沉淀"
 
     if not reason:
         reason = resp_text[:200] if resp_text else "无详细理由"

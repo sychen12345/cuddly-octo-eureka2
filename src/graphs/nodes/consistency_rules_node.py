@@ -1,6 +1,6 @@
 """
-Skill规则子工作流 — 一致性规则节点
-从配置文件读取一致性规则列表（支持 Jinja2 模板），运营可在画布上增删规则
+图片制作技能 — 套图统一节点
+运营在这里维护整组图保持统一的配色、字体、结构和信息密度。
 """
 import os
 import json
@@ -44,8 +44,8 @@ def consistency_rules_node(
     runtime: Runtime[Context]
 ) -> ConsistencyRulesNodeOutput:
     """
-    title: 一致性规则
-    desc: 从配置读取一致性规则列表（模板变量从选题动态注入），运营可在画布上增删规则
+    title: 图片制作技能：套图统一
+    desc: 保持整组图的配色、字体、结构和信息密度一致
     integrations:
     """
     ctx = runtime.context

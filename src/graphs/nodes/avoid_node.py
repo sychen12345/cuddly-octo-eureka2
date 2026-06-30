@@ -1,6 +1,6 @@
 """
-Skill规则子工作流 — 禁选项配置节点
-从配置文件读取禁选项列表（支持 Jinja2 模板），运营可在画布上增删标签
+图片制作技能 — 避坑清单节点
+运营在这里维护画面中不该出现的元素和表达。
 """
 import os
 import json
@@ -44,8 +44,8 @@ def avoid_node(
     runtime: Runtime[Context]
 ) -> AvoidNodeOutput:
     """
-    title: 禁选项配置
-    desc: 从配置读取需要避免的元素列表（模板变量从选题动态注入），运营可在画布上增删标签
+    title: 图片制作技能：避坑清单
+    desc: 确认画面里要避开的元素、风险表达和过度复杂内容
     integrations:
     """
     ctx = runtime.context

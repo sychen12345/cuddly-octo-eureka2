@@ -1,7 +1,6 @@
 """
-Skill规则子工作流 — 规则同步节点
-将所有子节点输出的风格、尺寸、必选项、禁选项、一致性规则合并，
-写回 skill_rules.json 配置文件
+图片制作技能 — 经验沉淀节点
+把运营确认的长期图片制作经验保存到图片技能里，供下次内容生产复用。
 """
 import os
 import json
@@ -34,8 +33,8 @@ def rules_sync_node(
     runtime: Runtime[Context]
 ) -> RulesSyncNodeOutput:
     """
-    title: 规则同步回写
-    desc: 合并所有子节点输出的风格规则，仅在智能判断结果为"规则修改"时写回 skill_rules.json 配置文件
+    title: 沉淀图片制作经验
+    desc: 把运营确认的长期图片制作经验沉淀到图片技能，下次生成内容时继续复用
     integrations:
     """
     ctx = runtime.context
@@ -94,7 +93,7 @@ def rules_sync_node(
                     status="ready"
                 ))
 
-    # 5. 仅在智能判断结果为"规则修改"时写回配置文件
+    # 5. 仅在 AI 技能教练建议长期保留时保存
     did_sync = False
     if state.rules_judge_decision == "sync":
         synced_cfg = {

@@ -23,14 +23,14 @@ except ImportError:  # pragma: no cover
     Context = Any  # type: ignore
 
 try:
-    from graphs.state import (
+    from .state import (
         ImageStyleRule,
         SkillRulesNodeInput,
         SkillRulesNodeOutput,
         WorkflowStep,
     )
 except ImportError:
-    from .state import (
+    from graphs.state import (
         ImageStyleRule,
         SkillRulesNodeInput,
         SkillRulesNodeOutput,

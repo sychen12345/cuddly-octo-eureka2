@@ -17,16 +17,6 @@ except ImportError:  # pragma: no cover - local fallback
     StateGraph = None  # type: ignore
 
 try:
-    from graphs.nodes.finalize_node import finalize_node
-    from graphs.nodes.greeting_node import greeting_node
-    from graphs.nodes.grok_image_node import grok_image_node
-    from graphs.nodes.openai_text_node import openai_text_node
-    from graphs.nodes.prompt_node import prompt_node
-    from graphs.nodes.process_node import process_node
-    from graphs.nodes.skill_subflow_node import skill_subflow_node
-    from graphs.nodes.skill_rules_node import skill_rules_node
-    from graphs.state import GlobalState, GraphInput, GraphOutput
-except ImportError:
     from .finalize_node import finalize_node
     from .greeting_node import greeting_node
     from .grok_image_node import grok_image_node
@@ -36,6 +26,16 @@ except ImportError:
     from .skill_subflow_node import skill_subflow_node
     from .skill_rules_node import skill_rules_node
     from .state import GlobalState, GraphInput, GraphOutput
+except ImportError:
+    from graphs.nodes.finalize_node import finalize_node
+    from graphs.nodes.greeting_node import greeting_node
+    from graphs.nodes.grok_image_node import grok_image_node
+    from graphs.nodes.openai_text_node import openai_text_node
+    from graphs.nodes.prompt_node import prompt_node
+    from graphs.nodes.process_node import process_node
+    from graphs.nodes.skill_subflow_node import skill_subflow_node
+    from graphs.nodes.skill_rules_node import skill_rules_node
+    from graphs.state import GlobalState, GraphInput, GraphOutput
 
 
 def _dump(model: Any) -> Dict[str, Any]:

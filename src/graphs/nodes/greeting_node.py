@@ -1,4 +1,4 @@
-"""节点 1/8 — 对标与需求挖掘 (greeting)"""
+"""竞品和用户需求分析节点"""
 
 import json, os
 from typing import Any, Dict, List
@@ -68,8 +68,8 @@ def greeting_node(
     runtime: Runtime[Context],
 ) -> GreetingNodeOutput:
     """
-    title: 对标与需求挖掘
-    desc: 从对标笔记信号和评论信号中提取对标账号和需求洞察
+    title: 竞品和用户需求分析
+    desc: 从对标笔记和评论原话里提炼可复用结构、用户痛点和内容机会
     integrations:
     """
     ctx = runtime.context

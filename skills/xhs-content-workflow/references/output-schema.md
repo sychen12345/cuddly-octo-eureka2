@@ -26,6 +26,7 @@ Use this schema when the user needs structured output, durable topic-bank record
 - `audience`: target reader.
 - `hook`: first-page or first-sentence hook.
 - `demand_source`: comment cluster or benchmark pattern that justifies the topic.
+- `hashtags`: topic hashtags from operator input, explicit `#...` text, or OpenAI web-researched topic output. Do not add hardcoded fallback tags during final packaging.
 - `outline`: 3-6 bullets for the note.
 - `proof_needed`: data, screenshot, case, template, checklist, or personal experience needed before publishing.
 - `differentiation`: what makes this not a copy of the benchmark.
@@ -73,6 +74,10 @@ Each `SkillSubflowStep` includes:
 - `editable`: whether the step can be changed.
 - `enabled`: whether this step is included in the model input.
 - `notes`: editing guidance for operators.
+
+`user_selected_topic` may be a full title or explicit hashtag. When present, it must win over automatic topic selection.
+
+When `xiaohongshu_url` is provided and real execution is enabled, the topic step should use OpenAI web search to produce the topic bank before fallback local heuristics.
 
 `skill_flow_overrides` may override a full subflow or individual steps:
 
@@ -213,7 +218,7 @@ Each image generation record includes:
   - `body`: concise copy.
   - `visual_prompt`: visual direction or image-generation prompt.
 - `caption`: full Xiaohongshu body copy.
-- `hashtags`: 5-10 tags.
+- `hashtags`: tags already attached to the selected topic. The final node must not invent generic fallback tags.
 - `cta`: a soft next action.
 - `review_checklist`: factual, ethical, and style checks before publishing.
 

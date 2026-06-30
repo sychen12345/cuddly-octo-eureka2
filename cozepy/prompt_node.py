@@ -24,9 +24,9 @@ except ImportError:  # pragma: no cover
     Context = Any  # type: ignore
 
 try:
-    from graphs.state import EditablePrompt, PromptNodeInput, PromptNodeOutput
-except ImportError:
     from .state import EditablePrompt, PromptNodeInput, PromptNodeOutput
+except ImportError:
+    from graphs.state import EditablePrompt, PromptNodeInput, PromptNodeOutput
 
 
 def _get(state: Any, key: str, default: Any = None) -> Any:

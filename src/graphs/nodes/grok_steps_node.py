@@ -1,6 +1,6 @@
 """
-Skill子流程子工作流 — Grok步骤配置节点
-从配置文件读取 Grok 套图子流程定义，Jinja2 模板渲染提示词，运营可编辑
+图片生成技能 — 步骤展开节点
+把套图生成技能展开成运营可查看、可拖动、可交给 AI 分析的步骤。
 """
 import os
 import json
@@ -27,7 +27,7 @@ def _render_grok_prompts(
     steps: List[Dict[str, Any]],
     render_ctx: Dict[str, Any],
 ) -> List[EditablePrompt]:
-    """渲染 Grok 相关步骤的提示词（从配置 default_prompt 用 Jinja2 渲染）"""
+    """渲染图片技能步骤提示词。"""
     prompts: List[EditablePrompt] = []
     for step in steps:
         prompt_key = step.get("prompt_key", "")
@@ -42,13 +42,13 @@ def _render_grok_prompts(
             dp = default_prompt_raw
 
         if "grok_plan_prompt" in prompt_key:
-            title = "规划套图视觉方向"
+            title = "确定套图画面方向"
             target = "grok-imagine-image-quality"
         elif "grok_image_prompt" in prompt_key:
-            title = "Grok 生图提示词"
+            title = "生成每页图片"
             target = "grok-imagine-image-quality"
         else:
-            title = "Grok 步骤"
+            title = "图片技能步骤"
             target = "grok-imagine-image-quality"
 
         prompts.append(EditablePrompt(
@@ -68,8 +68,8 @@ def grok_steps_node(
     runtime: Runtime[Context]
 ) -> GrokStepsNodeOutput:
     """
-    title: Grok步骤配置
-    desc: 从配置读取 Grok 套图子流程定义，Jinja2 模板渲染提示词（niche/audience/brand_voice/topic 动态注入），运营可编辑
+    title: 图片技能：拆步骤
+    desc: 展开图片生成技能，运营可让 AI 分析或调整每个步骤
     integrations:
     """
     ctx = runtime.context

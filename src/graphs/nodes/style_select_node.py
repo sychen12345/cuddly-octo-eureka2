@@ -1,6 +1,6 @@
 """
-Skill规则子工作流 — 风格选择节点
-从配置文件读取视觉风格，运营可在画布上切换 cartoon/flat/realistic 等
+图片制作技能 — 风格选择节点
+为当前小红书套图选择整体观感，运营可以在画布上切换 cartoon/flat/realistic 等风格。
 """
 import os
 import json
@@ -27,8 +27,8 @@ def style_select_node(
     runtime: Runtime[Context]
 ) -> StyleSelectNodeOutput:
     """
-    title: 风格选择
-    desc: 从配置读取视觉风格（cartoon/flat/realistic等），运营可在画布上切换
+    title: 图片制作技能：选风格
+    desc: 选择这组图想给人的整体感觉，例如卡通、扁平或写实
     integrations:
     """
     ctx = runtime.context

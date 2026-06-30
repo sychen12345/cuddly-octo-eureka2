@@ -1,4 +1,4 @@
-"""节点 6/8 — OpenAI GPT5.5 文案 (openai_text)"""
+"""AI生成小红书文案节点"""
 
 import json, os
 from typing import Any, Dict, List, Optional
@@ -65,8 +65,8 @@ def openai_text_node(
     runtime: Runtime[Context],
 ) -> OpenAITextNodeOutput:
     """
-    title: OpenAI GPT5.5 文案
-    desc: 调用 OpenAI 生成小红书图文卡片文案（标题、正文、每页脚本、视觉说明）
+    title: AI生成小红书文案
+    desc: 根据运营确认的文案技能生成标题、正文、每页脚本和视觉说明
     integrations: OpenAI
     """
     ctx = runtime.context

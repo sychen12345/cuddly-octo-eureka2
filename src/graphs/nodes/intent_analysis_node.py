@@ -14,8 +14,8 @@ def intent_analysis_node(
     runtime: Runtime[Context],
 ) -> IntentAnalysisOutput:
     """
-    title: Grok意图识别
-    desc: 分析运营的自然语言需求，识别意图（竞品调研/爆款选题/文案生成/图片制作/完整流程/数据复盘），灵活调度后续工作流
+    title: AI理解运营目标
+    desc: 分析运营的自然语言需求，判断本次要做竞品调研、爆款选题、文案生成、图片制作、完整流程还是数据复盘
     integrations: 大语言模型
     """
     ctx = runtime.context
