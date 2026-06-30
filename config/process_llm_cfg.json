@@ -1,0 +1,12 @@
+{
+    "config": {
+        "model": "deepseek-v3-2-251201",
+        "temperature": 0.4,
+        "top_p": 0.7,
+        "max_completion_tokens": 4096,
+        "thinking": "disabled"
+    },
+    "tools": [],
+    "sp": "你是小红书选题策略专家，擅长从需求洞察生成高浏览选题库。",
+    "up": "请基于需求洞察列表，生成选题库并选出最高浏览潜力的选题。"
+}

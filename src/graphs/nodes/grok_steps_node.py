@@ -1,6 +1,6 @@
 """
 Skill子流程子工作流 — Grok步骤配置节点
-从配置文件读取 Grok 套图子流程定义，渲染提示词，运营可编辑
+从配置文件读取 Grok 套图子流程定义，Jinja2 模板渲染提示词，运营可编辑
 """
 import os
 import json
@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 from langchain_core.runnables import RunnableConfig
 from langgraph.runtime import Runtime
 from coze_coding_utils.runtime_ctx.context import Context
+from jinja2 import Template
 
 from graphs.state import GrokStepsNodeInput, GrokStepsNodeOutput, EditablePrompt
 
@@ -24,30 +25,32 @@ def _load_subflows() -> List[Dict[str, Any]]:
 
 def _render_grok_prompts(
     steps: List[Dict[str, Any]],
-    niche: str,
-    audience: str,
-    brand_voice: str,
-    selected_topic_title: str
+    render_ctx: Dict[str, Any],
 ) -> List[EditablePrompt]:
-    """渲染 Grok 相关步骤的提示词"""
+    """渲染 Grok 相关步骤的提示词（从配置 default_prompt 用 Jinja2 渲染）"""
     prompts: List[EditablePrompt] = []
     for step in steps:
         prompt_key = step.get("prompt_key", "")
+        if "grok" not in prompt_key:
+            continue
+        # 从配置读取 default_prompt，用 Jinja2 渲染
+        default_prompt_raw = step.get("default_prompt", "")
+        try:
+            tpl = Template(default_prompt_raw)
+            dp = tpl.render(**render_ctx)
+        except Exception:
+            dp = default_prompt_raw
+
         if "grok_plan_prompt" in prompt_key:
-            dp = f"为选题「{selected_topic_title}」规划 3:4 cartoon 风格套图。"
             title = "规划套图视觉方向"
             target = "grok-imagine-image-quality"
         elif "grok_image_prompt" in prompt_key:
-            dp = (
-                f"生成小红书 3:4 卡通风格图文卡片套图。\n"
-                f"选题：{selected_topic_title}\n"
-                f"风格：卡通、短句、层级清楚、留白充足。\n"
-                f"每页一个核心信息，配色统一。"
-            )
             title = "Grok 生图提示词"
             target = "grok-imagine-image-quality"
         else:
-            continue
+            title = "Grok 步骤"
+            target = "grok-imagine-image-quality"
+
         prompts.append(EditablePrompt(
             key=prompt_key,
             title=title,
@@ -66,7 +69,7 @@ def grok_steps_node(
 ) -> GrokStepsNodeOutput:
     """
     title: Grok步骤配置
-    desc: 从配置读取 Grok 套图子流程定义并渲染提示词，运营可编辑
+    desc: 从配置读取 Grok 套图子流程定义，Jinja2 模板渲染提示词（niche/audience/brand_voice/topic 动态注入），运营可编辑
     integrations:
     """
     ctx = runtime.context
@@ -91,19 +94,21 @@ def grok_steps_node(
                 grok_subflow = copy.deepcopy(sf)
                 break
 
-    # 4. 获取上下文信息
-    niche = state.niche
-    audience = state.audience
-    brand_voice = state.brand_voice
+    # 4. 构建 Jinja2 渲染上下文
     selected_topic_title = ""
     if state.selected_topic is not None:
         selected_topic_title = state.selected_topic.title
 
+    render_ctx: Dict[str, Any] = {
+        "niche": state.niche,
+        "audience": state.audience,
+        "brand_voice": state.brand_voice,
+        "selected_topic_title": selected_topic_title,
+    }
+
     # 5. 渲染提示词
     steps = grok_subflow.get("steps", [])
-    grok_prompts = _render_grok_prompts(
-        steps, niche, audience, brand_voice, selected_topic_title
-    )
+    grok_prompts = _render_grok_prompts(steps, render_ctx)
 
     # 6. 将渲染后的提示词写回步骤
     for step in steps:

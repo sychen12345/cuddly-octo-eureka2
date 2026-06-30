@@ -1,0 +1,12 @@
+{
+    "config": {
+        "model": "deepseek-v3-2-251201",
+        "temperature": 0.4,
+        "top_p": 0.7,
+        "max_completion_tokens": 4096,
+        "thinking": "disabled"
+    },
+    "tools": [],
+    "sp": "你是小红书内容策略专家，擅长从对标笔记和用户评论中挖掘对标账号与需求洞察。",
+    "up": "请基于提供的对标信号和评论信号，提炼对标账号洞察和用户需求洞察。"
+}

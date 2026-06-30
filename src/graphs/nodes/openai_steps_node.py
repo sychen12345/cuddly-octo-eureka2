@@ -1,6 +1,6 @@
 """
 Skill子流程子工作流 — OpenAI步骤配置节点
-从配置文件读取 OpenAI 文案子流程定义，渲染提示词，运营可编辑
+从配置文件读取 OpenAI 文案子流程定义，Jinja2 模板渲染提示词，运营可编辑
 """
 import os
 import json
@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 from langchain_core.runnables import RunnableConfig
 from langgraph.runtime import Runtime
 from coze_coding_utils.runtime_ctx.context import Context
+from jinja2 import Template
 
 from graphs.state import OpenAIStepsNodeInput, OpenAIStepsNodeOutput, EditablePrompt
 
@@ -24,33 +25,32 @@ def _load_subflows() -> List[Dict[str, Any]]:
 
 def _render_openai_prompts(
     steps: List[Dict[str, Any]],
-    niche: str,
-    audience: str,
-    brand_voice: str,
-    selected_topic_title: str
+    render_ctx: Dict[str, Any],
 ) -> List[EditablePrompt]:
-    """渲染 OpenAI 相关步骤的提示词"""
+    """渲染 OpenAI 相关步骤的提示词（从配置 default_prompt 用 Jinja2 渲染）"""
     prompts: List[EditablePrompt] = []
     for step in steps:
         prompt_key = step.get("prompt_key", "")
+        if "openai" not in prompt_key:
+            continue
+        # 从配置读取 default_prompt，用 Jinja2 渲染
+        default_prompt_raw = step.get("default_prompt", "")
+        try:
+            tpl = Template(default_prompt_raw)
+            dp = tpl.render(**render_ctx)
+        except Exception:
+            dp = default_prompt_raw
+
         if "openai_text_prompt" in prompt_key:
-            dp = (
-                f"你是小红书内容创作专家，擅长按「{brand_voice}」语气写作。\n"
-                f"领域：{niche}\n目标人群：{audience}\n"
-                f"选题：{selected_topic_title}\n"
-                f"请生成图文卡片的标题选项、正文、每页脚本和视觉说明。"
-            )
             title = "OpenAI 文案提示词"
             target = "gpt-5.5"
         elif "openai_generate_prompt" in prompt_key:
-            dp = (
-                f"根据分析结果，按「{brand_voice}」语气生成"
-                f"{audience}的图文卡片正文和每页脚本。"
-            )
             title = "生成正文与卡片脚本"
             target = "gpt-5.5"
         else:
-            continue
+            title = "OpenAI 步骤"
+            target = "gpt-5.5"
+
         prompts.append(EditablePrompt(
             key=prompt_key,
             title=title,
@@ -69,7 +69,7 @@ def openai_steps_node(
 ) -> OpenAIStepsNodeOutput:
     """
     title: OpenAI步骤配置
-    desc: 从配置读取 OpenAI 文案子流程定义并渲染提示词，运营可编辑
+    desc: 从配置读取 OpenAI 文案子流程定义，Jinja2 模板渲染提示词（niche/audience/brand_voice/topic 动态注入），运营可编辑
     integrations:
     """
     ctx = runtime.context
@@ -89,25 +89,26 @@ def openai_steps_node(
     if state.skill_subflows_override and isinstance(state.skill_subflows_override, list):
         for sf in state.skill_subflows_override:
             if isinstance(sf, dict) and sf.get("skill_key") == "openai_text_skill":
-                # 比较 override 与原始配置
                 if json.dumps(sf, sort_keys=True, ensure_ascii=False) != json.dumps(openai_subflow, sort_keys=True, ensure_ascii=False):
                     openai_steps_changed = True
                 openai_subflow = copy.deepcopy(sf)
                 break
 
-    # 4. 获取上下文信息
-    niche = state.niche
-    audience = state.audience
-    brand_voice = state.brand_voice
+    # 4. 构建 Jinja2 渲染上下文
     selected_topic_title = ""
     if state.selected_topic is not None:
         selected_topic_title = state.selected_topic.title
 
+    render_ctx: Dict[str, Any] = {
+        "niche": state.niche,
+        "audience": state.audience,
+        "brand_voice": state.brand_voice,
+        "selected_topic_title": selected_topic_title,
+    }
+
     # 5. 渲染提示词
     steps = openai_subflow.get("steps", [])
-    openai_prompts = _render_openai_prompts(
-        steps, niche, audience, brand_voice, selected_topic_title
-    )
+    openai_prompts = _render_openai_prompts(steps, render_ctx)
 
     # 6. 将渲染后的提示词写回步骤
     for step in steps:

@@ -1,7 +1,7 @@
 {
     "config": {
-        "model": "doubao-seed-2-0-lite-260215",
-        "temperature": 0,
+        "model": "deepseek-v3-2-251201",
+        "temperature": 0.0,
         "top_p": 0.7,
         "max_completion_tokens": 512,
         "thinking": "disabled"

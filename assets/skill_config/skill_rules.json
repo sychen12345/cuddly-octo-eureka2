@@ -1,10 +1,10 @@
 {
   "image_style": {
-    "aspect_ratio": "3:4",
-    "style": "cartoon",
+    "aspect_ratio": "{{aspect_ratio|default('3:4')}}",
+    "style": "{{style|default('cartoon')}}",
     "must_have": [
       "小红书图文卡片；短句；层级清楚",
-      "领域：美妆护肤"
+      "领域：{{niche}}"
     ],
     "avoid": [
       "不要生成真人照片或写真",
@@ -24,11 +24,7 @@
       "title": "对标与需求挖掘",
       "model_or_tool": "",
       "prompt_key": "",
-      "output_keys": [
-        "research_brief",
-        "benchmark_accounts",
-        "demand_insights"
-      ],
+      "output_keys": ["research_brief", "benchmark_accounts", "demand_insights"],
       "status": "ready"
     },
     {
@@ -36,10 +32,7 @@
       "title": "选题库与高浏览选题",
       "model_or_tool": "",
       "prompt_key": "",
-      "output_keys": [
-        "topic_bank",
-        "selected_topic"
-      ],
+      "output_keys": ["topic_bank", "selected_topic"],
       "status": "ready"
     },
     {
@@ -47,10 +40,7 @@
       "title": "Skill规则与参考图",
       "model_or_tool": "",
       "prompt_key": "",
-      "output_keys": [
-        "image_style_rules",
-        "workflow_steps"
-      ],
+      "output_keys": ["image_style_rules", "workflow_steps"],
       "status": "ready"
     },
     {
@@ -58,9 +48,7 @@
       "title": "OpenAI/Grok Skill 子流程",
       "model_or_tool": "openai+grok",
       "prompt_key": "",
-      "output_keys": [
-        "skill_subflows"
-      ],
+      "output_keys": ["skill_subflows"],
       "status": "ready"
     },
     {
@@ -68,29 +56,23 @@
       "title": "在线提示词编辑",
       "model_or_tool": "",
       "prompt_key": "",
-      "output_keys": [
-        "editable_prompts"
-      ],
+      "output_keys": ["editable_prompts"],
       "status": "ready"
     },
     {
       "node_key": "openai_text",
-      "title": "OpenAI GPT5.5 文案",
-      "model_or_tool": "gpt-5.5",
+      "title": "OpenAI 文案",
+      "model_or_tool": "deepseek-v3-2-251201",
       "prompt_key": "openai_text_prompt",
-      "output_keys": [
-        "openai_text_package"
-      ],
+      "output_keys": ["openai_text_package"],
       "status": "ready"
     },
     {
       "node_key": "grok_image",
-      "title": "Grok Expert 套图",
+      "title": "Grok 套图",
       "model_or_tool": "grok-imagine-image-quality",
       "prompt_key": "grok_image_prompt",
-      "output_keys": [
-        "grok_image_set"
-      ],
+      "output_keys": ["grok_image_set"],
       "status": "ready"
     },
     {
@@ -98,11 +80,7 @@
       "title": "结果审核打包",
       "model_or_tool": "",
       "prompt_key": "",
-      "output_keys": [
-        "card_package",
-        "workflow_summary",
-        "next_commands"
-      ],
+      "output_keys": ["card_package", "workflow_summary", "next_commands"],
       "status": "ready"
     }
   ]

@@ -1,6 +1,6 @@
 """
 Skill规则子工作流 — 禁选项配置节点
-从配置文件读取禁选项列表，运营可在画布上增删标签
+从配置文件读取禁选项列表（支持 Jinja2 模板），运营可在画布上增删标签
 """
 import os
 import json
@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 from langchain_core.runnables import RunnableConfig
 from langgraph.runtime import Runtime
 from coze_coding_utils.runtime_ctx.context import Context
+from jinja2 import Template
 
 from graphs.state import AvoidNodeInput, AvoidNodeOutput
 
@@ -21,6 +22,22 @@ def _load_image_style() -> Dict[str, Any]:
     return cfg.get("image_style", {})
 
 
+def _render_list(items: List[Any], context: Dict[str, Any]) -> List[str]:
+    """渲染列表中的每个字符串为 Jinja2 模板"""
+    result: List[str] = []
+    for item in items:
+        if isinstance(item, str) and "{{" in item:
+            try:
+                tpl = Template(item)
+                rendered = tpl.render(**context)
+                result.append(rendered)
+            except Exception:
+                result.append(str(item))
+        else:
+            result.append(str(item))
+    return result
+
+
 def avoid_node(
     state: AvoidNodeInput,
     config: RunnableConfig,
@@ -28,7 +45,7 @@ def avoid_node(
 ) -> AvoidNodeOutput:
     """
     title: 禁选项配置
-    desc: 从配置读取需要避免的元素列表，运营可在画布上增删标签
+    desc: 从配置读取需要避免的元素列表（模板变量从选题动态注入），运营可在画布上增删标签
     integrations:
     """
     ctx = runtime.context
@@ -36,14 +53,21 @@ def avoid_node(
     # 1. 从配置文件读取当前禁选项
     image_style = _load_image_style()
     avoid_raw = image_style.get("avoid", [])
-    avoid: List[str] = list(avoid_raw) if isinstance(avoid_raw, list) else []
+    avoid_raw_list: List[Any] = list(avoid_raw) if isinstance(avoid_raw, list) else []
 
-    # 2. 如果有运行时 override，使用覆盖值
+    # 2. 构建模板渲染上下文
+    render_ctx: Dict[str, Any] = {
+        "niche": state.niche,
+        "audience": state.audience,
+    }
+    avoid: List[str] = _render_list(avoid_raw_list, render_ctx)
+
+    # 3. 如果有运行时 override，使用覆盖值
     avoid_changed = False
     if state.image_style_override and isinstance(state.image_style_override, dict):
         override_avoid = state.image_style_override.get("avoid")
         if isinstance(override_avoid, list):
-            new_avoid = [str(item) for item in override_avoid]
+            new_avoid = _render_list(override_avoid, render_ctx)
             if set(new_avoid) != set(avoid):
                 avoid_changed = True
             avoid = new_avoid

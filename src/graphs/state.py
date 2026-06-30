@@ -187,6 +187,7 @@ class GlobalState(BaseModel):
     card_count: int = Field(default=6, description="卡片数量")
     openai_api_key: str = Field(default="", description="OpenAI API Key（可选）")
     grok_api_key: str = Field(default="", description="Grok API Key（可选）")
+    deepseek_api_key: str = Field(default="", description="DeepSeek API Key（可选，不填则用平台默认）")
     execute_model_calls: bool = Field(default=False, description="是否真实调用模型")
     # 运营覆盖参数（画布上修改后传入）
     image_style_override: Optional[Dict[str, Any]] = Field(default=None, description="运营在画布上修改的图片风格覆盖")
@@ -232,14 +233,8 @@ class GlobalState(BaseModel):
     rules_judge_reason: str = Field(default="", description="规则判断理由")
     subflows_judge_reason: str = Field(default="", description="子流程判断理由")
     # 配置回写标记
-    rules_judge_decision: str = Field(default="skip", description="规则判断结果：sync 或 skip")
-    rules_judge_reason: str = Field(default="", description="规则判断理由")
-    subflows_judge_decision: str = Field(default="skip", description="子流程判断结果：sync 或 skip")
-    subflows_judge_reason: str = Field(default="", description="子流程判断理由")
     synced_skill_rules_cfg: Dict[str, Any] = Field(default_factory=dict, description="回写的 skill_rules 配置")
     synced_skill_subflows_cfg: List[Dict[str, Any]] = Field(default_factory=list, description="回写的 skill_subflows 配置")
-    # 子流程变更聚合
-    subflows_changed_items: List[Dict[str, Any]] = Field(default_factory=list, description="子流程变更项列表 [{field, old_value, new_value}]")
 
 
 # ═══════════════════════════════════════════════════════════
@@ -290,6 +285,7 @@ class GraphInput(BaseModel):
     card_count: int = Field(default=6, description="卡片数量")
     openai_api_key: str = Field(default="", description="OpenAI API Key（可选）")
     grok_api_key: str = Field(default="", description="Grok API Key（可选）")
+    deepseek_api_key: str = Field(default="", description="DeepSeek API Key（可选）")
     execute_model_calls: bool = Field(default=False, description="是否真实调用模型")
 
 class GraphOutput(BaseModel):
@@ -333,6 +329,7 @@ class GreetingNodeInput(BaseModel):
     brand_voice: str = Field(default="", description="品牌语气")
     openai_api_key: str = Field(default="", description="OpenAI API Key")
     grok_api_key: str = Field(default="", description="Grok API Key")
+    deepseek_api_key: str = Field(default="", description="DeepSeek API Key")
     execute_model_calls: bool = Field(default=False, description="是否真实调用模型")
 
 class GreetingNodeOutput(BaseModel):
@@ -372,7 +369,8 @@ class AspectRatioNodeOutput(BaseModel):
 
 # must_have_node: 必选项配置
 class MustHaveNodeInput(BaseModel):
-    niche: str = Field(default="", description="赛道（用于补充领域上下文）")
+    niche: str = Field(default="", description="赛道（用于模板渲染）")
+    audience: str = Field(default="", description="目标受众")
     image_style_override: Optional[Dict[str, Any]] = Field(default=None, description="风格覆盖")
 
 class MustHaveNodeOutput(BaseModel):
@@ -381,6 +379,8 @@ class MustHaveNodeOutput(BaseModel):
 
 # avoid_node: 禁选项配置
 class AvoidNodeInput(BaseModel):
+    niche: str = Field(default="", description="赛道（用于模板渲染）")
+    audience: str = Field(default="", description="目标受众")
     image_style_override: Optional[Dict[str, Any]] = Field(default=None, description="风格覆盖")
 
 class AvoidNodeOutput(BaseModel):
@@ -389,6 +389,8 @@ class AvoidNodeOutput(BaseModel):
 
 # consistency_rules_node: 一致性规则
 class ConsistencyRulesNodeInput(BaseModel):
+    niche: str = Field(default="", description="赛道（用于模板渲染）")
+    audience: str = Field(default="", description="目标受众")
     image_style_override: Optional[Dict[str, Any]] = Field(default=None, description="风格覆盖")
 
 class ConsistencyRulesNodeOutput(BaseModel):
@@ -478,6 +480,7 @@ class OpenAITextNodeInput(BaseModel):
     editable_prompts: List[EditablePrompt] = Field(default_factory=list, description="可编辑提示词")
     skill_subflows: List[SkillSubflowDef] = Field(default_factory=list, description="Skill 子流程列表")
     openai_api_key: str = Field(default="", description="OpenAI API Key")
+    deepseek_api_key: str = Field(default="", description="DeepSeek API Key")
     execute_model_calls: bool = Field(default=False, description="是否真实调用模型")
 
 class OpenAITextNodeOutput(BaseModel):
@@ -492,6 +495,7 @@ class GrokImageNodeInput(BaseModel):
     editable_prompts: List[EditablePrompt] = Field(default_factory=list, description="可编辑提示词")
     skill_subflows: List[SkillSubflowDef] = Field(default_factory=list, description="Skill 子流程列表")
     grok_api_key: str = Field(default="", description="Grok API Key")
+    deepseek_api_key: str = Field(default="", description="DeepSeek API Key")
     execute_model_calls: bool = Field(default=False, description="是否真实调用模型")
 
 class GrokImageNodeOutput(BaseModel):

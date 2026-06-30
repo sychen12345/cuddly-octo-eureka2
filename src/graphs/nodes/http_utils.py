@@ -58,3 +58,30 @@ def call_grok_image(
     data = _post_json(url, headers, payload, timeout=120)
     image_url: str = data["data"][0]["url"]
     return image_url
+
+# ── DeepSeek Chat ──────────────────────────────────────────
+
+def call_deepseek_chat(
+    api_key: str,
+    model: str = "deepseek-chat",
+    system_prompt: str = "",
+    user_prompt: str = "",
+    temperature: float = 0.4,
+    max_tokens: int = 4096,
+    base_url: str = "https://api.deepseek.com/v1",
+) -> str:
+    """调用 DeepSeek Chat API"""
+    url = f"{base_url}/chat/completions"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    data = _post_json(url, headers, payload)
+    content: str = data["choices"][0]["message"]["content"]
+    return content

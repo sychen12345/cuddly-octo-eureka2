@@ -12,7 +12,7 @@ from graphs.state import (
     BenchmarkAccount, DemandInsight,
     GreetingNodeInput, GreetingNodeOutput,
 )
-from graphs.nodes.http_utils import call_openai_chat
+from graphs.nodes.http_utils import call_openai_chat, call_deepseek_chat
 
 
 def _require_api_keys(state: GreetingNodeInput) -> str:
@@ -78,8 +78,8 @@ def greeting_node(
     benchmark_accounts = _build_benchmark_accounts(state.benchmark_notes)
     demand_insights = _build_demand_insights(state.comment_notes)
 
-    # 如果需要真实调用模型，用 OpenAI 做深度分析
-    if state.execute_model_calls and state.openai_api_key:
+    # 如果需要真实调用模型，优先用 DeepSeek，fallback 到 OpenAI
+    if state.execute_model_calls:
         sp = f"你是小红书内容策略专家。赛道：{state.niche}，目标人群：{state.audience}。"
         up = (
             f"请基于以下对标信号和评论信号，分别提炼 2-3 条对标账号洞察和 2-3 个需求洞察。\n"
@@ -88,18 +88,23 @@ def greeting_node(
             f"约束：{json.dumps(state.constraints, ensure_ascii=False)}\n"
             f"请返回 JSON：{{\"benchmark_accounts\": [...], \"demand_insights\": [...]}}"
         )
-        raw = call_openai_chat(state.openai_api_key, system_prompt=sp, user_prompt=up)
-        try:
-            parsed = json.loads(raw)
-            if isinstance(parsed, dict):
-                ba_list = parsed.get("benchmark_accounts", [])
-                di_list = parsed.get("demand_insights", [])
-                if isinstance(ba_list, list) and len(ba_list) > 0:
-                    benchmark_accounts = [BenchmarkAccount(**a) if isinstance(a, dict) else a for a in ba_list]
-                if isinstance(di_list, list) and len(di_list) > 0:
-                    demand_insights = [DemandInsight(**d) if isinstance(d, dict) else d for d in di_list]
-        except (json.JSONDecodeError, TypeError):
-            pass  # fallback to rule-based results
+        raw = ""
+        if state.deepseek_api_key:
+            raw = call_deepseek_chat(state.deepseek_api_key, system_prompt=sp, user_prompt=up)
+        elif state.openai_api_key:
+            raw = call_openai_chat(state.openai_api_key, system_prompt=sp, user_prompt=up)
+        if raw:
+            try:
+                parsed = json.loads(raw)
+                if isinstance(parsed, dict):
+                    ba_list = parsed.get("benchmark_accounts", [])
+                    di_list = parsed.get("demand_insights", [])
+                    if isinstance(ba_list, list) and len(ba_list) > 0:
+                        benchmark_accounts = [BenchmarkAccount(**a) if isinstance(a, dict) else a for a in ba_list]
+                    if isinstance(di_list, list) and len(di_list) > 0:
+                        demand_insights = [DemandInsight(**d) if isinstance(d, dict) else d for d in di_list]
+            except (json.JSONDecodeError, TypeError):
+                pass  # fallback to rule-based results
 
     research_brief = (
         f"赛道「{state.niche}」面向「{state.audience}」，"

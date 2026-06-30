@@ -2,9 +2,9 @@
   "subflows": [
     {
       "skill_key": "openai_text_skill",
-      "title": "OpenAI GPT5.5 文案子流程",
+      "title": "OpenAI 文案子流程",
       "provider": "openai",
-      "model": "gpt-5.5",
+      "model": "deepseek-v3-2-251201",
       "mode": "ultra_high",
       "endpoint": "https://api.openai.com/v1/chat/completions",
       "description": "生成小红书图文卡片文案：标题、正文、每页脚本、视觉说明",
@@ -14,53 +14,40 @@
           "step_key": "openai_analyze",
           "title": "分析选题与需求",
           "node_type": "model",
-          "model_or_tool": "gpt-5.5",
+          "model_or_tool": "deepseek-v3-2-251201",
           "prompt_key": "openai_text_prompt",
-          "input_keys": [
-            "selected_topic",
-            "audience",
-            "niche"
-          ],
-          "output_keys": [
-            "title_options",
-            "card_script",
-            "image_brief"
-          ],
+          "input_keys": ["selected_topic", "audience", "niche"],
+          "output_keys": ["title_options", "card_script", "image_brief"],
           "editable": true,
           "enabled": true,
           "notes": "可修改提示词来调整文案风格",
-          "default_prompt": "你是小红书内容创作专家，擅长按「」语气写作。\n领域：美妆护肤\n目标人群：25-35岁都市女性\n选题：\n请生成图文卡片的标题选项、正文、每页脚本和视觉说明。",
-          "final_prompt": "你是小红书内容创作专家，擅长按「」语气写作。\n领域：美妆护肤\n目标人群：25-35岁都市女性\n选题：\n请生成图文卡片的标题选项、正文、每页脚本和视觉说明。"
+          "default_prompt": "你是小红书内容创作专家，擅长按「{{brand_voice}}」语气写作。\n领域：{{niche}}\n目标人群：{{audience}}\n选题：{{selected_topic_title}}\n请生成图文卡片的标题选项、正文、每页脚本和视觉说明。",
+          "final_prompt": "你是小红书内容创作专家，擅长按「{{brand_voice}}」语气写作。\n领域：{{niche}}\n目标人群：{{audience}}\n选题：{{selected_topic_title}}\n请生成图文卡片的标题选项、正文、每页脚本和视觉说明。"
         },
         {
           "step_key": "openai_generate",
           "title": "生成正文与卡片脚本",
           "node_type": "prompt",
-          "model_or_tool": "gpt-5.5",
+          "model_or_tool": "deepseek-v3-2-251201",
           "prompt_key": "openai_generate_prompt",
-          "input_keys": [
-            "openai_text_prompt_output"
-          ],
-          "output_keys": [
-            "post_description",
-            "card_script"
-          ],
+          "input_keys": ["openai_text_prompt_output"],
+          "output_keys": ["post_description", "card_script"],
           "editable": true,
           "enabled": true,
           "notes": "可调整每页卡片的内容密度",
-          "default_prompt": "根据分析结果，按「」语气生成25-35岁都市女性的图文卡片正文和每页脚本。",
-          "final_prompt": "根据分析结果，按「」语气生成25-35岁都市女性的图文卡片正文和每页脚本。"
+          "default_prompt": "根据分析结果，按「{{brand_voice}}」语气生成{{audience}}的图文卡片正文和每页脚本。",
+          "final_prompt": "根据分析结果，按「{{brand_voice}}」语气生成{{audience}}的图文卡片正文和每页脚本。"
         }
       ]
     },
     {
       "skill_key": "grok_image_skill",
-      "title": "Grok Expert 套图子流程",
+      "title": "Grok 套图子流程",
       "provider": "grok",
       "model": "grok-imagine-image-quality",
       "mode": "Expert",
       "endpoint": "https://api.x.ai/v1/images/generations",
-      "description": "生成 3:4 cartoon 风格的小红书图文套图",
+      "description": "生成 {{aspect_ratio}} {{style}} 风格的小红书图文套图",
       "editable": true,
       "steps": [
         {
@@ -69,18 +56,13 @@
           "node_type": "rule",
           "model_or_tool": "grok-imagine-image-quality",
           "prompt_key": "grok_plan_prompt",
-          "input_keys": [
-            "image_style_rules",
-            "openai_text_package"
-          ],
-          "output_keys": [
-            "grok_image_plan"
-          ],
+          "input_keys": ["image_style_rules", "openai_text_package"],
+          "output_keys": ["grok_image_plan"],
           "editable": true,
           "enabled": true,
           "notes": "可修改视觉方向",
-          "default_prompt": "为选题「」规划 3:4 cartoon 风格套图。",
-          "final_prompt": "为选题「」规划 3:4 cartoon 风格套图。"
+          "default_prompt": "为选题「{{selected_topic_title}}」规划 {{aspect_ratio}} {{style}} 风格套图。",
+          "final_prompt": "为选题「{{selected_topic_title}}」规划 {{aspect_ratio}} {{style}} 风格套图。"
         },
         {
           "step_key": "grok_generate",
@@ -88,17 +70,13 @@
           "node_type": "model",
           "model_or_tool": "grok-imagine-image-quality",
           "prompt_key": "grok_image_prompt",
-          "input_keys": [
-            "grok_image_plan"
-          ],
-          "output_keys": [
-            "grok_image_set"
-          ],
+          "input_keys": ["grok_image_plan"],
+          "output_keys": ["grok_image_set"],
           "editable": true,
           "enabled": true,
           "notes": "可修改生图提示词",
-          "default_prompt": "生成小红书 3:4 卡通风格图文卡片套图。\n选题：\n风格：卡通、短句、层级清楚、留白充足。\n每页一个核心信息，配色统一。",
-          "final_prompt": "生成小红书 3:4 卡通风格图文卡片套图。\n选题：\n风格：卡通、短句、层级清楚、留白充足。\n每页一个核心信息，配色统一。"
+          "default_prompt": "生成小红书 {{aspect_ratio}} {{style}}风格图文卡片套图。\n选题：{{selected_topic_title}}\n风格：{{style}}、短句、层级清楚、留白充足。\n每页一个核心信息，配色统一。",
+          "final_prompt": "生成小红书 {{aspect_ratio}} {{style}}风格图文卡片套图。\n选题：{{selected_topic_title}}\n风格：{{style}}、短句、层级清楚、留白充足。\n每页一个核心信息，配色统一。"
         }
       ]
     }
