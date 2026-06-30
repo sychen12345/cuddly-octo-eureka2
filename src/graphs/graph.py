@@ -1,7 +1,7 @@
 """
 小红书内容工作流 — 主图编排
 ───────────────────────────
-开始 -> 对标与需求挖掘 -> 选题库 -> Skill规则 -> 子流程 -> 提示词编辑
+开始 -> 对标与需求挖掘 -> 选题库 -> Skill规则(子工作流) -> 子流程(子工作流) -> 提示词编辑
       ─┬─ OpenAI 文案  (并行)
        └─ Grok 套图   (并行)
       → 结果审核打包 -> 结束
@@ -32,8 +32,8 @@ builder = StateGraph(
 # ── 注册节点 ──────────────────────────────────────────────
 builder.add_node("greeting", greeting_node)
 builder.add_node("process", process_node)
-builder.add_node("skill_rules", skill_rules_node)
-builder.add_node("skill_subflow", skill_subflow_node)
+builder.add_node("skill_rules", skill_rules_node)       # 子工作流包装节点
+builder.add_node("skill_subflow", skill_subflow_node)   # 子工作流包装节点
 builder.add_node("prompt", prompt_node)
 builder.add_node("openai_text", openai_text_node)
 builder.add_node("grok_image", grok_image_node)

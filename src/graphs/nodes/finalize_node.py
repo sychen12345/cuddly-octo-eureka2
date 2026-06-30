@@ -1,10 +1,10 @@
 """
 结果审核打包节点
-整合所有节点输出，生成最终结果；支持将运营修改回写到配置文件
+整合所有节点输出，生成最终结果
+配置回写已由子工作流的同步节点处理
 """
-import os
 import json
-import copy
+import os
 from typing import List, Dict, Optional, Any, Union
 
 from pydantic import BaseModel
@@ -13,22 +13,6 @@ from langgraph.runtime import Runtime
 from coze_coding_utils.runtime_ctx.context import Context
 
 from graphs.state import FinalizeNodeInput, FinalizeNodeOutput
-
-
-def _to_dict(obj: Any) -> Any:
-    """将 BaseModel 转为 dict，已经是 dict 则原样返回"""
-    if isinstance(obj, BaseModel):
-        return obj.model_dump()
-    if isinstance(obj, dict):
-        return obj
-    return obj
-
-
-def _sync_back_config(cfg_filename: str, data: Any) -> None:
-    """将运营修改后的配置回写到配置文件"""
-    cfg_path = os.path.join(os.getenv("COZE_WORKSPACE_PATH", ""), "assets", "skill_config", cfg_filename)
-    with open(cfg_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
 
 
 def _get_attr(data: Any, key: str, default: Any = None) -> Any:
@@ -66,7 +50,13 @@ def _build_card_package(
 
     # 图片
     grok_images_raw = _get_attr(grok_image_set, "images", [])
-    grok_images: List[Dict[str, Any]] = [_to_dict(img) for img in (grok_images_raw if isinstance(grok_images_raw, list) else [])]
+    grok_images: List[Dict[str, Any]] = []
+    if isinstance(grok_images_raw, list):
+        for img in grok_images_raw:
+            if isinstance(img, BaseModel):
+                grok_images.append(img.model_dump())
+            elif isinstance(img, dict):
+                grok_images.append(img)
 
     # 组装每页卡片
     cards: List[Dict[str, Any]] = []
@@ -139,7 +129,7 @@ def _build_workflow_steps(workflow_steps_cfg: List[Any]) -> List[Dict[str, Any]]
     """构建工作流步骤概览"""
     result: List[Dict[str, Any]] = []
     for step in workflow_steps_cfg:
-        step_dict = _to_dict(step) if isinstance(step, BaseModel) else step
+        step_dict = step.model_dump() if isinstance(step, BaseModel) else step
         if isinstance(step_dict, dict):
             result.append({
                 "node_key": step_dict.get("node_key", ""),
@@ -153,12 +143,12 @@ def _build_workflow_steps(workflow_steps_cfg: List[Any]) -> List[Dict[str, Any]]
 
 
 def _build_workflow_diagram() -> Dict[str, Any]:
-    """构建工作流图（含并行结构）"""
+    """构建工作流图（含子工作流标记和并行结构）"""
     nodes = [
         {"id": "greeting", "title": "对标与需求挖掘", "type": "task", "x": 0, "y": 0},
         {"id": "process", "title": "选题库", "type": "task", "x": 1, "y": 0},
-        {"id": "skill_rules", "title": "Skill规则", "type": "task", "x": 2, "y": 0},
-        {"id": "skill_subflow", "title": "子流程", "type": "task", "x": 3, "y": 0},
+        {"id": "skill_rules", "title": "Skill规则(子工作流)", "type": "subgraph", "x": 2, "y": 0},
+        {"id": "skill_subflow", "title": "子流程(子工作流)", "type": "subgraph", "x": 3, "y": 0},
         {"id": "prompt", "title": "提示词编辑", "type": "task", "x": 4, "y": 0},
         {"id": "openai_text", "title": "OpenAI 文案", "type": "task", "x": 5, "y": -1},
         {"id": "grok_image", "title": "Grok 套图", "type": "task", "x": 5, "y": 1},
@@ -177,26 +167,6 @@ def _build_workflow_diagram() -> Dict[str, Any]:
     return {"nodes": nodes, "edges": edges}
 
 
-def _build_operator_control(
-    subflow_panels: List[Any],
-    prompt_panels: List[Any],
-    style_panels: List[Any]
-) -> Dict[str, Any]:
-    """构建完整的 operator_control"""
-    all_panels = []
-    for p in style_panels:
-        all_panels.append(_to_dict(p) if isinstance(p, BaseModel) else p)
-    for p in subflow_panels:
-        all_panels.append(_to_dict(p) if isinstance(p, BaseModel) else p)
-    for p in prompt_panels:
-        all_panels.append(_to_dict(p) if isinstance(p, BaseModel) else p)
-    return {
-        "edit_panels": all_panels,
-        "actions": ["edit_prompt", "toggle_step", "rerun", "reorder_step", "sync_config"],
-        "status": "ready"
-    }
-
-
 def finalize_node(
     state: FinalizeNodeInput,
     config: RunnableConfig,
@@ -204,7 +174,7 @@ def finalize_node(
 ) -> FinalizeNodeOutput:
     """
     title: 结果审核打包
-    desc: 整合所有节点输出，生成最终卡片包和工作流摘要；支持将运营修改回写到配置文件
+    desc: 整合所有节点输出，生成最终卡片包和工作流摘要；配置回写由子工作流同步节点处理
     integrations:
     """
     ctx = runtime.context
@@ -247,24 +217,12 @@ def finalize_node(
         "把当前卡片包改成更强封面标题和更短页面正文。"
     ]
 
-    # 6. 构建完整的 operator_control
-    operator_control = _build_operator_control(
-        state.operator_control_subflow_panels,
-        state.operator_control_prompt_panels,
-        state.operator_control_edit_panels
-    )
-
-    # 7. 如果运营有修改，回写配置文件
-    if state.sync_back_skill_rules and state.synced_skill_rules_cfg:
-        _sync_back_config("skill_rules.json", {
-            "image_style": _to_dict(state.synced_skill_rules_cfg),
-            "workflow_steps": [_to_dict(s) for s in state.workflow_steps]
-        })
-
-    if state.sync_back_skill_subflows and state.synced_skill_subflows_cfg:
-        _sync_back_config("skill_subflows.json", {
-            "subflows": [_to_dict(sf) for sf in state.synced_skill_subflows_cfg]
-        })
+    # 6. 构建运算器控制（简化版，子工作流已处理编辑面板）
+    operator_control = {
+        "edit_panels": [],
+        "actions": ["edit_prompt", "toggle_step", "rerun", "reorder_step", "sync_config"],
+        "status": "ready"
+    }
 
     return FinalizeNodeOutput(
         card_package=card_package,
