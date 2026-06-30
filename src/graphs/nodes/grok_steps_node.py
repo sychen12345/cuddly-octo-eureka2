@@ -93,8 +93,8 @@ def grok_steps_node(
     audience = state.audience
     brand_voice = state.brand_voice
     selected_topic_title = ""
-    if isinstance(state.selected_topic, dict):
-        selected_topic_title = state.selected_topic.get("title", "")
+    if state.selected_topic is not None:
+        selected_topic_title = state.selected_topic.title
 
     # 5. 渲染提示词
     steps = grok_subflow.get("steps", [])
