@@ -259,56 +259,62 @@ def _build_workflow_steps(workflow_steps_cfg: List[Any]) -> List[Dict[str, Any]]
 
 
 def _build_workflow_diagram() -> Dict[str, Any]:
-    """构建工作流图（17 节点主画布平铺结构）"""
+    """构建工作流图（19 节点，含意图路由）"""
     nodes = [
-        # 需求阶段
-        {"id": "greeting", "title": "对标与需求挖掘", "type": "agent", "x": 0, "y": 0},
-        {"id": "process", "title": "选题库与高浏览选题", "type": "agent", "x": 1, "y": 0},
-        # Skill 规则子流程（画布平铺）
-        {"id": "style_select", "title": "风格选择", "type": "task", "x": 2, "y": 0},
-        {"id": "aspect_ratio", "title": "尺寸选择", "type": "task", "x": 3, "y": 0},
-        {"id": "must_have", "title": "必选项配置", "type": "task", "x": 4, "y": 0},
-        {"id": "avoid", "title": "禁选项配置", "type": "task", "x": 5, "y": 0},
-        {"id": "consistency_rules", "title": "一致性规则", "type": "task", "x": 6, "y": 0},
-        {"id": "grok_rules_judge", "title": "规则智能判断", "type": "agent", "x": 7, "y": 0},
-        {"id": "rules_sync", "title": "规则同步回写", "type": "task", "x": 7, "y": -1},
-        # Skill 子流程（画布平铺）
-        {"id": "openai_steps", "title": "OpenAI 步骤配置", "type": "task", "x": 8, "y": -1},
-        {"id": "grok_steps", "title": "Grok 步骤配置", "type": "task", "x": 8, "y": 1},
-        {"id": "grok_subflow_judge", "title": "子流程智能判断", "type": "agent", "x": 9, "y": 0},
-        {"id": "subflow_sync", "title": "子流程同步回写", "type": "task", "x": 9, "y": -1},
-        # 生成阶段
-        {"id": "prompt", "title": "提示词编辑", "type": "task", "x": 10, "y": 0},
-        {"id": "openai_text", "title": "OpenAI GPT5.5 文案", "type": "task", "x": 11, "y": -1},
-        {"id": "grok_image", "title": "Grok Expert 套图", "type": "task", "x": 11, "y": 1},
-        {"id": "finalize", "title": "结果审核打包", "type": "task", "x": 12, "y": 0},
+        # 智能入口
+        {"id": "需求接收", "title": "需求接收", "type": "task", "x": 0, "y": 0},
+        {"id": "Grok意图识别", "title": "Grok意图识别", "type": "agent", "x": 1, "y": 0},
+        # 调研阶段
+        {"id": "竞品调研分析", "title": "竞品调研分析", "type": "agent", "x": 2, "y": 0},
+        {"id": "爆款选题筛选", "title": "爆款选题筛选", "type": "agent", "x": 3, "y": 0},
+        # 视觉规则
+        {"id": "视觉风格设定", "title": "视觉风格设定", "type": "task", "x": 4, "y": 0},
+        {"id": "图片尺寸设定", "title": "图片尺寸设定", "type": "task", "x": 5, "y": 0},
+        {"id": "内容必选项", "title": "内容必选项", "type": "task", "x": 6, "y": 0},
+        {"id": "内容禁选项", "title": "内容禁选项", "type": "task", "x": 7, "y": 0},
+        {"id": "套图一致性规则", "title": "套图一致性规则", "type": "task", "x": 8, "y": 0},
+        {"id": "规则变更判断", "title": "规则变更判断", "type": "agent", "x": 9, "y": 0},
+        {"id": "规则同步保存", "title": "规则同步保存", "type": "task", "x": 9, "y": -1},
+        # 生成步骤
+        {"id": "文案生成步骤", "title": "文案生成步骤", "type": "task", "x": 10, "y": -1},
+        {"id": "图片生成步骤", "title": "图片生成步骤", "type": "task", "x": 10, "y": 1},
+        {"id": "步骤变更判断", "title": "步骤变更判断", "type": "agent", "x": 11, "y": 0},
+        {"id": "步骤同步保存", "title": "步骤同步保存", "type": "task", "x": 11, "y": -1},
+        # 内容生成
+        {"id": "提示词最终确认", "title": "提示词最终确认", "type": "task", "x": 12, "y": 0},
+        {"id": "AI文案生成", "title": "AI文案生成", "type": "task", "x": 13, "y": -1},
+        {"id": "AI图片生成", "title": "AI图片生成", "type": "task", "x": 13, "y": 1},
+        {"id": "内容审核打包", "title": "内容审核打包", "type": "task", "x": 14, "y": 0},
     ]
     edges = [
-        # 需求阶段
-        {"source": "greeting", "target": "process", "label": ""},
-        # Skill 规则线性
-        {"source": "process", "target": "style_select", "label": ""},
-        {"source": "style_select", "target": "aspect_ratio", "label": ""},
-        {"source": "aspect_ratio", "target": "must_have", "label": ""},
-        {"source": "must_have", "target": "avoid", "label": ""},
-        {"source": "avoid", "target": "consistency_rules", "label": ""},
-        {"source": "consistency_rules", "target": "grok_rules_judge", "label": ""},
+        # 意图路由
+        {"source": "需求接收", "target": "Grok意图识别", "label": ""},
+        {"source": "Grok意图识别", "target": "竞品调研分析", "label": "竞品调研/爆款选题/完整流程"},
+        {"source": "竞品调研分析", "target": "爆款选题筛选", "label": ""},
+        # 意图分流
+        {"source": "爆款选题筛选", "target": "视觉风格设定", "label": "完整流程→继续"},
+        # 视觉规则
+        {"source": "视觉风格设定", "target": "图片尺寸设定", "label": ""},
+        {"source": "图片尺寸设定", "target": "内容必选项", "label": ""},
+        {"source": "内容必选项", "target": "内容禁选项", "label": ""},
+        {"source": "内容禁选项", "target": "套图一致性规则", "label": ""},
+        {"source": "套图一致性规则", "target": "规则变更判断", "label": ""},
         # 规则判断分支
-        {"source": "grok_rules_judge", "target": "rules_sync", "label": "规则修改→同步"},
-        {"source": "grok_rules_judge", "target": "openai_steps", "label": "内容调整→跳过"},
-        {"source": "rules_sync", "target": "openai_steps", "label": ""},
-        # 子流程并行
-        {"source": "openai_steps", "target": "grok_steps", "label": ""},
-        {"source": "grok_steps", "target": "grok_subflow_judge", "label": ""},
-        # 子流程判断分支
-        {"source": "grok_subflow_judge", "target": "subflow_sync", "label": "规则修改→同步"},
-        {"source": "grok_subflow_judge", "target": "prompt", "label": "内容调整→跳过"},
-        {"source": "subflow_sync", "target": "prompt", "label": ""},
-        # 生成并行
-        {"source": "prompt", "target": "openai_text", "label": ""},
-        {"source": "prompt", "target": "grok_image", "label": ""},
-        {"source": "openai_text", "target": "finalize", "label": ""},
-        {"source": "grok_image", "target": "finalize", "label": ""},
+        {"source": "规则变更判断", "target": "规则同步保存", "label": "规则修改→同步"},
+        {"source": "规则变更判断", "target": "文案生成步骤", "label": "内容调整→跳过"},
+        {"source": "规则同步保存", "target": "文案生成步骤", "label": ""},
+        # 生成步骤
+        {"source": "文案生成步骤", "target": "图片生成步骤", "label": ""},
+        {"source": "图片生成步骤", "target": "步骤变更判断", "label": ""},
+        # 步骤判断分支
+        {"source": "步骤变更判断", "target": "步骤同步保存", "label": "规则修改→同步"},
+        {"source": "步骤变更判断", "target": "提示词最终确认", "label": "内容调整→跳过"},
+        {"source": "步骤同步保存", "target": "提示词最终确认", "label": ""},
+        # 内容生成并行
+        {"source": "提示词最终确认", "target": "AI文案生成", "label": ""},
+        {"source": "提示词最终确认", "target": "AI图片生成", "label": ""},
+        {"source": "AI文案生成", "target": "内容审核打包", "label": ""},
+        {"source": "AI图片生成", "target": "内容审核打包", "label": ""},
     ]
     return {"nodes": nodes, "edges": edges}
 

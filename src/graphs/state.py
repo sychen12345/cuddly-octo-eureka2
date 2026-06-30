@@ -189,6 +189,11 @@ class GlobalState(BaseModel):
     grok_api_key: str = Field(default="", description="Grok API Key（可选）")
     deepseek_api_key: str = Field(default="", description="DeepSeek API Key（可选，不填则用平台默认）")
     execute_model_calls: bool = Field(default=False, description="是否真实调用模型")
+    # 灵活入口参数
+    user_request: str = Field(default="", description="运营的自然语言需求描述")
+    xiaohongshu_url: str = Field(default="", description="小红书链接（可选）")
+    intent: str = Field(default="完整流程", description="AI识别出的运营意图")
+    intent_reason: str = Field(default="", description="意图识别理由")
     # 运营覆盖参数（画布上修改后传入）
     image_style_override: Optional[Dict[str, Any]] = Field(default=None, description="运营在画布上修改的图片风格覆盖")
     workflow_steps_override: Optional[List[Dict[str, Any]]] = Field(default=None, description="运营在画布上拖拽排序后的步骤覆盖")
@@ -270,13 +275,39 @@ class SubflowJudgePath(BaseModel):
 
 
 # ═══════════════════════════════════════════════════════════
+#  意图识别节点 IO 类型
+# ═══════════════════════════════════════════════════════════
+
+class IntentAnalysisInput(BaseModel):
+    """意图识别节点的输入"""
+    user_request: str = Field(default="", description="运营的自然语言需求")
+    xiaohongshu_url: str = Field(default="", description="小红书链接")
+    niche: str = Field(default="", description="赛道/领域")
+    audience: str = Field(default="", description="目标人群")
+
+class IntentAnalysisOutput(BaseModel):
+    """意图识别节点的输出"""
+    intent: str = Field(..., description="识别出的运营意图：竞品调研|爆款选题|文案生成|图片制作|完整流程|数据复盘")
+    intent_reason: str = Field(default="", description="意图识别理由")
+    niche: str = Field(default="", description="从需求中提取或确认的赛道")
+    audience: str = Field(default="", description="从需求中提取或确认的目标人群")
+
+class IntentPath(BaseModel):
+    """意图路由的条件分支输入"""
+    intent: str = Field(..., description="识别出的运营意图")
+
+
+# ═══════════════════════════════════════════════════════════
 #  图的输入输出
 # ═══════════════════════════════════════════════════════════
 
 class GraphInput(BaseModel):
     """工作流的输入参数"""
-    niche: str = Field(..., description="赛道/领域")
-    audience: str = Field(..., description="目标人群")
+    # 灵活入口：运营可以说一段话，也可以贴链接
+    user_request: str = Field(default="", description="运营的自然语言需求（如：帮我分析这个竞品的数据）")
+    xiaohongshu_url: str = Field(default="", description="小红书链接（可选，用于竞品分析或文案参考）")
+    niche: str = Field(default="", description="赛道/领域（可选，不填则由AI从需求中提取）")
+    audience: str = Field(default="", description="目标人群（可选）")
     goal: str = Field(default="生成一组小红书图文卡片", description="目标")
     benchmark_notes: List[str] = Field(default_factory=list, description="对标笔记信号")
     comment_notes: List[str] = Field(default_factory=list, description="评论信号")

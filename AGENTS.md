@@ -1,68 +1,60 @@
 ## 项目概述
-- **名称**: 小红书内容创作工作流
-- **功能**: 从对标挖掘、选题库构建、Skill规则/子流程配置（Jinja2模板动态注入 + 智能判断是否需同步）、提示词编辑，到OpenAI/DeepSeek文案+Grok套图并行生成，最终审核打包的完整内容生产流水线
-- **模型**: 所有Agent节点默认使用 DeepSeek V3 (`deepseek-v3-2-251201`)，支持用户自带 DeepSeek API Key
+- **名称**: 小红书AI内容运营工作流
+- **功能**: 运营只需输入需求（文字+可选小红书链接），Grok 智能识别意图后自动路由到对应流程：竞品调研 → 爆款选题 → 视觉设定 → 文案生成 → 图片生成 → 审核打包
 
-### 节点清单
-| 节点名 | 文件位置 | 类型 | 功能描述 | 分支逻辑 | 配置文件 |
-|-------|---------|------|---------|---------|---------|
-| greeting | `nodes/greeting_node.py` | agent | 对标与需求挖掘（优先DeepSeek，fallback OpenAI） | - | `config/greeting_llm_cfg.json` |
-| process | `nodes/process_node.py` | agent | 选题库与高浏览选题 | - | `config/process_llm_cfg.json` |
-| style_select | `nodes/style_select_node.py` | task | 风格选择：从配置读取图片风格选项 | - | - |
-| aspect_ratio | `nodes/aspect_ratio_node.py` | task | 尺寸选择：从配置读取图片尺寸比例 | - | - |
-| must_have | `nodes/must_have_node.py` | task | 必选项配置：Jinja2模板渲染（`{{niche}}`等动态注入），运营可增删标签 | - | - |
-| avoid | `nodes/avoid_node.py` | task | 禁选项配置：Jinja2模板渲染，运营可增删标签 | - | - |
-| consistency_rules | `nodes/consistency_rules_node.py` | task | 一致性规则：Jinja2模板渲染，运营可增删规则 | - | - |
-| grok_rules_judge | `nodes/grok_rules_judge_node.py` | agent | 智能判断规则变更：DeepSeek判断变更是否需要同步回skill配置 | "sync_rules"→rules_sync, "skip"→openai_steps | `config/grok_rules_judge_cfg.json` |
-| rules_sync | `nodes/rules_sync_node.py` | task | Skill规则同步回写：组装规则并写回配置文件 | - | - |
-| openai_steps | `nodes/openai_steps_node.py` | task | OpenAI步骤配置：Jinja2模板渲染提示词（niche/audience/brand_voice/topic动态注入），运营可编辑 | - | - |
-| grok_steps | `nodes/grok_steps_node.py` | task | Grok步骤配置：Jinja2模板渲染提示词（niche/audience/brand_voice/topic动态注入），运营可编辑 | - | - |
-| grok_subflow_judge | `nodes/grok_subflow_judge_node.py` | agent | 智能判断子流程变更：DeepSeek判断变更是否需要同步回skill配置 | "sync_subflows"→subflow_sync, "skip"→prompt | `config/grok_subflow_judge_cfg.json` |
-| subflow_sync | `nodes/subflow_sync_node.py` | task | 子流程同步回写：组装子流程并写回配置文件 | - | - |
-| prompt | `nodes/prompt_node.py` | task | 在线提示词编辑 | - | - |
-| openai_text | `nodes/openai_text_node.py` | task | OpenAI/DeepSeek GPT5.5 文案生成 | - | - |
-| grok_image | `nodes/grok_image_node.py` | task | Grok Expert 套图生成 | - | - |
-| finalize | `nodes/finalize_node.py` | task | 结果审核打包：将Grok图片URL嵌入GPT5.5卡片文案，智能生成话题标签 | - | - |
+## 节点清单
+| 节点名 | 文件位置 | 类型 | 功能描述 | 配置文件 |
+|-------|---------|------|---------|---------|
+| 需求接收 | `nodes/intent_analysis_node.py` | task | 接收运营自由文本+链接输入 | - |
+| Grok意图识别 | `nodes/intent_analysis_node.py` | agent | AI分析运营意图，决定走哪条路径 | `config/intent_analysis_cfg.json` |
+| 竞品调研分析 | `nodes/greeting_node.py` | agent | 对标账号结构拆解与需求挖掘 | `config/greeting_llm_cfg.json` |
+| 爆款选题筛选 | `nodes/process_node.py` | agent | 选题库生成与高浏览潜力评分 | `config/process_llm_cfg.json` |
+| 视觉风格设定 | `nodes/style_select_node.py` | task | 从配置读取视觉风格（运营可切换） | - |
+| 图片尺寸设定 | `nodes/aspect_ratio_node.py` | task | 从配置读取图片比例 | - |
+| 内容必选项 | `nodes/must_have_node.py` | task | 必须包含的内容元素（模板渲染） | - |
+| 内容禁选项 | `nodes/avoid_node.py` | task | 禁止出现的内容（模板渲染） | - |
+| 套图一致性规则 | `nodes/consistency_rules_node.py` | task | 多图统一风格约束（模板渲染） | - |
+| 规则变更判断 | `nodes/grok_rules_judge_node.py` | agent | AI判断运营修改的是规则还是内容 | `config/grok_rules_judge_cfg.json` |
+| 规则同步保存 | `nodes/rules_sync_node.py` | task | 将规则修改写回 skill_rules.json | - |
+| 文案生成步骤 | `nodes/openai_steps_node.py` | task | 配置GPT文案生成步骤 | - |
+| 图片生成步骤 | `nodes/grok_steps_node.py` | task | 配置Grok图片生成步骤 | - |
+| 步骤变更判断 | `nodes/grok_subflow_judge_node.py` | agent | AI判断运营修改的是步骤还是内容 | `config/grok_subflow_judge_cfg.json` |
+| 步骤同步保存 | `nodes/subflow_sync_node.py` | task | 将步骤修改写回 skill_subflows.json | - |
+| 提示词最终确认 | `nodes/prompt_node.py` | task | 运营最终确认提示词 | - |
+| AI文案生成 | `nodes/openai_text_node.py` | task | GPT生成图文卡片文案 | - |
+| AI图片生成 | `nodes/grok_image_node.py` | task | Grok生成卡片套图 | - |
+| 内容审核打包 | `nodes/finalize_node.py` | task | 审核并输出最终内容 | - |
 
-**类型说明**: task(任务节点) / agent(大模型) / condition(条件分支) / looparray(列表循环) / loopcond(条件循环)
+**类型说明**: task(任务节点) / agent(AI大模型) / condition(条件分支)
 
-### 模板渲染机制
-- **配置即模板**: `skill_rules.json` 和 `skill_subflows.json` 中的字符串值支持 Jinja2 语法（如 `"领域：{{niche}}"`）
-- **运行时注入**: must_have、avoid、consistency_rules、openai_steps、grok_steps 节点读取配置后用当前 State 值渲染模板
-- **可用变量**: `niche`（领域）、`audience`（受众）、`brand_voice`（语气）、`selected_topic_title`（选题标题）
-- **运营可编辑**: 渲染后的值运营可在画布上覆盖修改
+## 条件分支
+| 分支名 | 文件位置 | 条件 | 路由 |
+|-------|---------|------|------|
+| intent_path | `graph.py` | Grok意图识别结果 | 竞品调研/爆款选题/数据复盘→END，完整流程→继续 |
+| should_sync_rules | `graph.py` | 规则变更判断 | sync_rules→规则同步保存，skip→文案生成步骤 |
+| should_sync_subflows | `graph.py` | 步骤变更判断 | sync_subflows→步骤同步保存，skip→提示词最终确认 |
 
-### 主图拓扑
-```
-greeting → process → style_select → aspect_ratio → must_have → avoid → consistency_rules
-  ↓
-grok_rules_judge ──(条件分支)──┬→ rules_sync → openai_steps
-                               └→ openai_steps
-  ↓
-openai_steps ──┐
-grok_steps  ───┤
-  ↓
-grok_subflow_judge ──(条件分支)──┬→ subflow_sync → prompt
-                                └→ prompt
-  ↓
-prompt → [openai_text || grok_image] → finalize → END
-```
-
-### 智能判断逻辑
-- **grok_rules_judge**: DeepSeek V3 判断规则变更类型
-- **grok_subflow_judge**: DeepSeek V3 判断子流程变更类型
-
-### 配置文件
-| 配置文件 | 用途 |
-|---------|------|
-| `config/greeting_llm_cfg.json` | 对标与需求挖掘 Agent 模型配置（DeepSeek V3） |
-| `config/process_llm_cfg.json` | 选题库 Agent 模型配置（DeepSeek V3） |
-| `config/grok_rules_judge_cfg.json` | 规则变更智能判断 Agent 模型配置（DeepSeek V3） |
-| `config/grok_subflow_judge_cfg.json` | 子流程变更智能判断 Agent 模型配置（DeepSeek V3） |
-| `assets/skill_config/skill_rules.json` | 图片风格规则模板（风格/尺寸/必选项/禁选项/一致性规则，支持 `{{niche}}` 等变量） |
-| `assets/skill_config/skill_subflows.json` | OpenAI/Grok 子流程步骤模板（提示词支持 `{{niche}}`/`{{audience}}` 等变量） |
+## 配置文件
+- `assets/skill_config/skill_rules.json` — 图片风格规则（Jinja2模板）
+- `assets/skill_config/skill_subflows.json` — 子流程步骤配置（Jinja2模板）
+- `config/intent_analysis_cfg.json` — Grok意图识别 LLM 配置
+- `config/greeting_llm_cfg.json` — 竞品调研 LLM 配置
+- `config/process_llm_cfg.json` — 选题筛选 LLM 配置
+- `config/grok_rules_judge_cfg.json` — 规则判断 LLM 配置
+- `config/grok_subflow_judge_cfg.json` — 步骤判断 LLM 配置
 
 ## 技能使用
-- 节点 `grok_rules_judge` 使用大语言模型技能（deepseek-v3-2-251201）
-- 节点 `grok_subflow_judge` 使用大语言模型技能（deepseek-v3-2-251201）
-- 节点 `greeting` 优先使用用户 DeepSeek API Key 直调，fallback 到 OpenAI
+- `竞品调研分析` 使用 LLM (deepseek-v3-2-251201) 或 OpenAI
+- `爆款选题筛选` 使用 LLM (deepseek-v3-2-251201)
+- `Grok意图识别` 使用 LLM (deepseek-v3-2-251201)
+- `规则变更判断` 使用 LLM (deepseek-v3-2-251201)
+- `步骤变更判断` 使用 LLM (deepseek-v3-2-251201)
+- `AI文案生成` 使用 OpenAI GPT-5.5
+- `AI图片生成` 使用 Grok Imagine
+
+## 意图路由机制
+运营输入自由文本（+ 可选小红书链接）→ Grok意图识别分析 → 输出 intent：
+- `竞品调研` → 竞品调研分析 → END（只看数据）
+- `爆款选题` → 竞品调研分析 → 爆款选题筛选 → END
+- `完整流程` → 全部节点 → 内容审核打包 → END
+- `数据复盘` → END（待扩展）
