@@ -1,0 +1,4 @@
+interface:
+  display_name: "XHS Content Workflow"
+  short_description: "Parallel GPT/Grok XHS workflow with visual edits"
+  default_prompt: "Use $xhs-content-workflow to choose a high-view Xiaohongshu topic, edit OpenAI/Grok visual subflows with operator fields, run GPT text and Grok image branches in parallel, and package 3:4 cartoon cards."
