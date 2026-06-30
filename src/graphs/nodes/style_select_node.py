@@ -38,9 +38,12 @@ def style_select_node(
     current_style: str = image_style.get("style", "cartoon")
 
     # 2. 如果有运行时 override，使用覆盖值
+    style_changed = False
     if state.image_style_override and isinstance(state.image_style_override, dict):
         override_style = state.image_style_override.get("style")
         if isinstance(override_style, str) and override_style:
+            if override_style != current_style:
+                style_changed = True
             current_style = override_style
 
-    return StyleSelectNodeOutput(style=current_style)
+    return StyleSelectNodeOutput(style=current_style, style_changed=style_changed)

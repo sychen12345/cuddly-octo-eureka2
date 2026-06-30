@@ -39,9 +39,13 @@ def avoid_node(
     avoid: List[str] = list(avoid_raw) if isinstance(avoid_raw, list) else []
 
     # 2. 如果有运行时 override，使用覆盖值
+    avoid_changed = False
     if state.image_style_override and isinstance(state.image_style_override, dict):
         override_avoid = state.image_style_override.get("avoid")
         if isinstance(override_avoid, list):
-            avoid = [str(item) for item in override_avoid]
+            new_avoid = [str(item) for item in override_avoid]
+            if set(new_avoid) != set(avoid):
+                avoid_changed = True
+            avoid = new_avoid
 
-    return AvoidNodeOutput(avoid=avoid)
+    return AvoidNodeOutput(avoid=avoid, avoid_changed=avoid_changed)

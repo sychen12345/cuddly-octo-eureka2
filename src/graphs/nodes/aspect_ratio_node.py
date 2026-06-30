@@ -38,9 +38,12 @@ def aspect_ratio_node(
     current_ratio: str = image_style.get("aspect_ratio", "3:4")
 
     # 2. 如果有运行时 override，使用覆盖值
+    ratio_changed = False
     if state.image_style_override and isinstance(state.image_style_override, dict):
         override_ratio = state.image_style_override.get("aspect_ratio")
         if isinstance(override_ratio, str) and override_ratio:
+            if override_ratio != current_ratio:
+                ratio_changed = True
             current_ratio = override_ratio
 
-    return AspectRatioNodeOutput(aspect_ratio=current_ratio)
+    return AspectRatioNodeOutput(aspect_ratio=current_ratio, ratio_changed=ratio_changed)

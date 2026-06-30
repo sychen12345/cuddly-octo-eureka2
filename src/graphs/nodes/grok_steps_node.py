@@ -81,10 +81,13 @@ def grok_steps_node(
             grok_subflow = copy.deepcopy(sf)
             break
 
-    # 3. 如果有 override，合并覆盖
+    # 3. 如果有 override，合并覆盖并检测变更
+    grok_steps_changed = False
     if state.skill_subflows_override and isinstance(state.skill_subflows_override, list):
         for sf in state.skill_subflows_override:
             if isinstance(sf, dict) and sf.get("skill_key") == "grok_image_skill":
+                if json.dumps(sf, sort_keys=True, ensure_ascii=False) != json.dumps(grok_subflow, sort_keys=True, ensure_ascii=False):
+                    grok_steps_changed = True
                 grok_subflow = copy.deepcopy(sf)
                 break
 
@@ -113,5 +116,6 @@ def grok_steps_node(
 
     return GrokStepsNodeOutput(
         grok_subflow=grok_subflow,
-        grok_prompts=grok_prompts
+        grok_prompts=grok_prompts,
+        grok_steps_changed=grok_steps_changed
     )

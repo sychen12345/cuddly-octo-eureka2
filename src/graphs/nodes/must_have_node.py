@@ -39,14 +39,18 @@ def must_have_node(
     must_have: List[str] = list(must_have_raw) if isinstance(must_have_raw, list) else []
 
     # 2. 如果有运行时 override，使用覆盖值
+    must_have_changed = False
     if state.image_style_override and isinstance(state.image_style_override, dict):
         override_must = state.image_style_override.get("must_have")
         if isinstance(override_must, list):
-            must_have = [str(item) for item in override_must]
+            new_must = [str(item) for item in override_must]
+            if set(new_must) != set(must_have):
+                must_have_changed = True
+            must_have = new_must
 
     # 3. 根据赛道补充领域上下文
     niche = state.niche
     if niche and f"领域：{niche}" not in must_have:
         must_have.append(f"领域：{niche}")
 
-    return MustHaveNodeOutput(must_have=must_have)
+    return MustHaveNodeOutput(must_have=must_have, must_have_changed=must_have_changed)

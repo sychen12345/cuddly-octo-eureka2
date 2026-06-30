@@ -35,7 +35,7 @@ def rules_sync_node(
 ) -> RulesSyncNodeOutput:
     """
     title: 规则同步回写
-    desc: 合并所有子节点输出的风格规则，写回 skill_rules.json 配置文件
+    desc: 合并所有子节点输出的风格规则，仅在智能判断结果为"规则修改"时写回 skill_rules.json 配置文件
     integrations:
     """
     ctx = runtime.context
@@ -94,15 +94,20 @@ def rules_sync_node(
                     status="ready"
                 ))
 
-    # 5. 写回配置文件
-    synced_cfg = {
-        "image_style": merged_image_style,
-        "workflow_steps": [step.model_dump() for step in workflow_steps]
-    }
-    _sync_back_config(synced_cfg)
+    # 5. 仅在智能判断结果为"规则修改"时写回配置文件
+    did_sync = False
+    if state.rules_judge_decision == "sync":
+        synced_cfg = {
+            "image_style": merged_image_style,
+            "workflow_steps": [step.model_dump() for step in workflow_steps]
+        }
+        _sync_back_config(synced_cfg)
+        did_sync = True
 
     return RulesSyncNodeOutput(
         image_style_rules=image_style_rules,
         workflow_steps=workflow_steps,
-        synced_skill_rules_cfg=merged_image_style
+        synced_skill_rules_cfg=merged_image_style,
+        rules_judge_decision=state.rules_judge_decision,
+        rules_synced=did_sync
     )

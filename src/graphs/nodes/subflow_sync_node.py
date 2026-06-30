@@ -95,9 +95,12 @@ def subflow_sync_node(
     for p in state.grok_prompts:
         editable_prompts.append(p)
 
-    # 4. 写回配置文件
-    synced_cfg: List[Dict[str, Any]] = [_to_dict(sf) for sf in all_subflows_raw]
-    _sync_back_config({"subflows": synced_cfg})
+    # 4. 仅在智能判断结果为"规则修改"时写回配置文件
+    if state.subflows_judge_decision == "sync":
+        synced_cfg: List[Dict[str, Any]] = [_to_dict(sf) for sf in all_subflows_raw]
+        _sync_back_config({"subflows": synced_cfg})
+    else:
+        synced_cfg: List[Dict[str, Any]] = [_to_dict(sf) for sf in all_subflows_raw]
 
     return SubflowSyncNodeOutput(
         skill_subflows=skill_subflows,

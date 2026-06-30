@@ -39,9 +39,13 @@ def consistency_rules_node(
     consistency_rules: List[str] = list(rules_raw) if isinstance(rules_raw, list) else []
 
     # 2. 如果有运行时 override，使用覆盖值
+    consistency_rules_changed = False
     if state.image_style_override and isinstance(state.image_style_override, dict):
         override_rules = state.image_style_override.get("consistency_rules")
         if isinstance(override_rules, list):
-            consistency_rules = [str(item) for item in override_rules]
+            new_rules = [str(item) for item in override_rules]
+            if set(new_rules) != set(consistency_rules):
+                consistency_rules_changed = True
+            consistency_rules = new_rules
 
-    return ConsistencyRulesNodeOutput(consistency_rules=consistency_rules)
+    return ConsistencyRulesNodeOutput(consistency_rules=consistency_rules, consistency_rules_changed=consistency_rules_changed)

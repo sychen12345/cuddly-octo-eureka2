@@ -223,9 +223,54 @@ class GlobalState(BaseModel):
     operator_control: Optional[OperatorControl] = Field(default=None, description="运算器控制")
     workflow_diagram_nodes: List[WorkflowDiagramNode] = Field(default_factory=list, description="工作流节点图")
     workflow_diagram_edges: List[WorkflowDiagramEdge] = Field(default_factory=list, description="工作流边图")
+    # 变更检测
+    rules_changed_items: List[Dict[str, Any]] = Field(default_factory=list, description="规则变更项列表 [{field, old_value, new_value}]")
+    subflows_changed_items: List[Dict[str, Any]] = Field(default_factory=list, description="子流程变更项列表 [{field, old_value, new_value}]")
+    rules_judge_decision: str = Field(default="skip", description="规则智能判断结果：sync 或 skip")
+    subflows_judge_decision: str = Field(default="skip", description="子流程智能判断结果：sync 或 skip")
+    rules_judge_reason: str = Field(default="", description="规则判断理由")
+    subflows_judge_reason: str = Field(default="", description="子流程判断理由")
     # 配置回写标记
+    rules_judge_decision: str = Field(default="skip", description="规则判断结果：sync 或 skip")
+    rules_judge_reason: str = Field(default="", description="规则判断理由")
+    subflows_judge_decision: str = Field(default="skip", description="子流程判断结果：sync 或 skip")
+    subflows_judge_reason: str = Field(default="", description="子流程判断理由")
     synced_skill_rules_cfg: Dict[str, Any] = Field(default_factory=dict, description="回写的 skill_rules 配置")
     synced_skill_subflows_cfg: List[Dict[str, Any]] = Field(default_factory=list, description="回写的 skill_subflows 配置")
+    # 子流程变更聚合
+    subflows_changed_items: List[Dict[str, Any]] = Field(default_factory=list, description="子流程变更项列表 [{field, old_value, new_value}]")
+
+
+# ═══════════════════════════════════════════════════════════
+#  智能判断节点 IO 类型
+# ═══════════════════════════════════════════════════════════
+
+# grok_rules_judge_node: 规则变更智能判断
+class GrokRulesJudgeInput(BaseModel):
+    niche: str = Field(default="", description="赛道/领域")
+    audience: str = Field(default="", description="目标人群")
+    rules_changed_items: List[Dict[str, Any]] = Field(default_factory=list, description="规则变更项列表")
+
+class GrokRulesJudgeOutput(BaseModel):
+    rules_judge_decision: str = Field(..., description="判断结果：sync 或 skip")
+    rules_judge_reason: str = Field(default="", description="判断理由")
+
+# grok_subflow_judge_node: 子流程变更智能判断
+class GrokSubflowJudgeInput(BaseModel):
+    niche: str = Field(default="", description="赛道/领域")
+    audience: str = Field(default="", description="目标人群")
+    subflows_changed_items: List[Dict[str, Any]] = Field(default_factory=list, description="子流程变更项列表")
+
+class GrokSubflowJudgeOutput(BaseModel):
+    subflows_judge_decision: str = Field(..., description="判断结果：sync 或 skip")
+    subflows_judge_reason: str = Field(default="", description="判断理由")
+
+# 条件分支类型
+class RulesJudgePath(BaseModel):
+    rules_judge_decision: str = Field(..., description="规则变更判断结果：sync 或 skip")
+
+class SubflowJudgePath(BaseModel):
+    subflows_judge_decision: str = Field(..., description="子流程变更判断结果：sync 或 skip")
 
 
 # ═══════════════════════════════════════════════════════════
@@ -264,6 +309,10 @@ class GraphOutput(BaseModel):
     operator_control: Optional[OperatorControl] = Field(default=None, description="运算器控制")
     workflow_diagram_nodes: List[WorkflowDiagramNode] = Field(default_factory=list, description="工作流节点图")
     workflow_diagram_edges: List[WorkflowDiagramEdge] = Field(default_factory=list, description="工作流边图")
+    rules_judge_decision: str = Field(default="skip", description="规则智能判断结果")
+    rules_judge_reason: str = Field(default="", description="规则判断理由")
+    subflows_judge_decision: str = Field(default="skip", description="子流程智能判断结果")
+    subflows_judge_reason: str = Field(default="", description="子流程判断理由")
     synced_skill_rules_cfg: Dict[str, Any] = Field(default_factory=dict, description="回写的 skill_rules 配置")
     synced_skill_subflows_cfg: List[Dict[str, Any]] = Field(default_factory=list, description="回写的 skill_subflows 配置")
 
@@ -310,6 +359,7 @@ class StyleSelectNodeInput(BaseModel):
 
 class StyleSelectNodeOutput(BaseModel):
     style: str = Field(..., description="选中的视觉风格")
+    rules_changed_items: List[Dict[str, Any]] = Field(default_factory=list, description="规则变更项")
 
 # aspect_ratio_node: 尺寸选择
 class AspectRatioNodeInput(BaseModel):
@@ -317,6 +367,7 @@ class AspectRatioNodeInput(BaseModel):
 
 class AspectRatioNodeOutput(BaseModel):
     aspect_ratio: str = Field(..., description="选中的画面比例")
+    rules_changed_items: List[Dict[str, Any]] = Field(default_factory=list, description="规则变更项")
 
 # must_have_node: 必选项配置
 class MustHaveNodeInput(BaseModel):
@@ -325,6 +376,7 @@ class MustHaveNodeInput(BaseModel):
 
 class MustHaveNodeOutput(BaseModel):
     must_have: List[str] = Field(..., description="必须包含的元素列表")
+    rules_changed_items: List[Dict[str, Any]] = Field(default_factory=list, description="规则变更项")
 
 # avoid_node: 禁选项配置
 class AvoidNodeInput(BaseModel):
@@ -332,6 +384,7 @@ class AvoidNodeInput(BaseModel):
 
 class AvoidNodeOutput(BaseModel):
     avoid: List[str] = Field(..., description="避免的元素列表")
+    rules_changed_items: List[Dict[str, Any]] = Field(default_factory=list, description="规则变更项")
 
 # consistency_rules_node: 一致性规则
 class ConsistencyRulesNodeInput(BaseModel):
@@ -339,6 +392,7 @@ class ConsistencyRulesNodeInput(BaseModel):
 
 class ConsistencyRulesNodeOutput(BaseModel):
     consistency_rules: List[str] = Field(..., description="一致性规则列表")
+    rules_changed_items: List[Dict[str, Any]] = Field(default_factory=list, description="规则变更项")
 
 # rules_sync_node: 规则同步回写
 class RulesSyncNodeInput(BaseModel):
@@ -349,11 +403,14 @@ class RulesSyncNodeInput(BaseModel):
     avoid: List[str] = Field(default_factory=list, description="避免")
     consistency_rules: List[str] = Field(default_factory=list, description="一致性规则")
     workflow_steps_override: Optional[List[Dict[str, Any]]] = Field(default=None, description="步骤覆盖")
+    rules_judge_decision: str = Field(default="skip", description="规则判断结果：sync 或 skip")
 
 class RulesSyncNodeOutput(BaseModel):
     image_style_rules: Optional[ImageStyleRules] = Field(default=None, description="图片风格规则")
     workflow_steps: List[WorkflowStepInfo] = Field(default_factory=list, description="工作流步骤")
     synced_skill_rules_cfg: Dict[str, Any] = Field(default_factory=dict, description="回写的 skill_rules 配置")
+    rules_judge_decision: str = Field(default="skip", description="智能判断结果：sync=需同步回写, skip=跳过同步")
+    rules_synced: bool = Field(default=False, description="是否已同步回写配置文件")
 
 # openai_steps_node: OpenAI步骤配置
 class OpenAIStepsNodeInput(BaseModel):
@@ -366,6 +423,8 @@ class OpenAIStepsNodeInput(BaseModel):
 class OpenAIStepsNodeOutput(BaseModel):
     openai_subflow: Dict[str, Any] = Field(default_factory=dict, description="OpenAI子流程定义")
     openai_prompts: List[EditablePrompt] = Field(default_factory=list, description="OpenAI可编辑提示词")
+    subflow_has_changes: bool = Field(default=False, description="子流程是否有运营修改")
+    subflow_change_description: str = Field(default="", description="变更描述")
 
 # grok_steps_node: Grok步骤配置
 class GrokStepsNodeInput(BaseModel):
@@ -378,6 +437,8 @@ class GrokStepsNodeInput(BaseModel):
 class GrokStepsNodeOutput(BaseModel):
     grok_subflow: Dict[str, Any] = Field(default_factory=dict, description="Grok子流程定义")
     grok_prompts: List[EditablePrompt] = Field(default_factory=list, description="Grok可编辑提示词")
+    subflow_has_changes: bool = Field(default=False, description="子流程是否有运营修改")
+    subflow_change_description: str = Field(default="", description="变更描述")
 
 # subflow_sync_node: 子流程同步回写
 class SubflowSyncNodeInput(BaseModel):
@@ -385,11 +446,14 @@ class SubflowSyncNodeInput(BaseModel):
     grok_subflow: Dict[str, Any] = Field(default_factory=dict, description="Grok子流程定义")
     openai_prompts: List[EditablePrompt] = Field(default_factory=list, description="OpenAI可编辑提示词")
     grok_prompts: List[EditablePrompt] = Field(default_factory=list, description="Grok可编辑提示词")
+    subflows_judge_decision: str = Field(default="skip", description="子流程判断结果：sync 或 skip")
 
 class SubflowSyncNodeOutput(BaseModel):
     skill_subflows: List[SkillSubflowDef] = Field(default_factory=list, description="Skill子流程列表")
     editable_prompts: List[EditablePrompt] = Field(default_factory=list, description="可编辑提示词")
     synced_skill_subflows_cfg: List[Dict[str, Any]] = Field(default_factory=list, description="回写的 skill_subflows 配置")
+    subflows_judge_decision: str = Field(default="skip", description="智能判断结果：sync=需同步回写, skip=跳过同步")
+    subflow_synced: bool = Field(default=False, description="是否已同步回写配置文件")
 
 # prompt_node: 在线提示词编辑
 class PromptNodeInput(BaseModel):

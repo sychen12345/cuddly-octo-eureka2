@@ -84,10 +84,14 @@ def openai_steps_node(
             openai_subflow = copy.deepcopy(sf)
             break
 
-    # 3. 如果有 override，合并覆盖
+    # 3. 如果有 override，合并覆盖并检测变更
+    openai_steps_changed = False
     if state.skill_subflows_override and isinstance(state.skill_subflows_override, list):
         for sf in state.skill_subflows_override:
             if isinstance(sf, dict) and sf.get("skill_key") == "openai_text_skill":
+                # 比较 override 与原始配置
+                if json.dumps(sf, sort_keys=True, ensure_ascii=False) != json.dumps(openai_subflow, sort_keys=True, ensure_ascii=False):
+                    openai_steps_changed = True
                 openai_subflow = copy.deepcopy(sf)
                 break
 
@@ -116,5 +120,6 @@ def openai_steps_node(
 
     return OpenAIStepsNodeOutput(
         openai_subflow=openai_subflow,
-        openai_prompts=openai_prompts
+        openai_prompts=openai_prompts,
+        openai_steps_changed=openai_steps_changed
     )
